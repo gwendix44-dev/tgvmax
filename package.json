@@ -1,0 +1,14 @@
+{
+  "name": "tgvmax-planner",
+  "private": true,
+  "type": "module",
+  "description": "Planificateur TGV MAX (PWA)",
+  "scripts": {
+    "data": "node scripts/build-data.mjs",
+    "check": "node scripts/check-alerts.mjs",
+    "vapid": "node scripts/make-vapid.mjs",
+    "test": "node --test tests/engine.test.mjs"
+  },
+  "dependencies": { "web-push": "^3.6.7" },
+  "engines": { "node": ">=20" }
+}

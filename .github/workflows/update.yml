@@ -1,0 +1,58 @@
+name: Mise à jour des données et alertes
+
+on:
+  schedule:
+    # Le jeu de données SNCF est mis à jour en début de matinée : plusieurs relectures (UTC).
+    - cron: '35 4 * * *'
+    - cron: '30 5 * * *'
+    - cron: '30 6 * * *'
+    - cron: '30 8 * * *'
+    - cron: '30 12 * * *'
+    - cron: '30 17 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['data/subs/**', 'js/**', 'css/**', 'index.html', 'sw.js', 'manifest.webmanifest', 'icons/**']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci || npm install
+      - name: Relire le jeu de données SNCF
+        run: node scripts/build-data.mjs
+      - name: Chercher les nouvelles places et notifier
+        env:
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+        run: node scripts/check-alerts.mjs
+      - name: Enregistrer l'état des alertes
+        run: |
+          git config user.name "tgvmax-bot"; git config user.email "tgvmax-bot@users.noreply.github.com"
+          git add -A data/state data/subs
+          git diff --cached --quiet || (git commit -m "État des alertes" && git pull --rebase && git push)
+      - name: Préparer le site
+        run: |
+          mkdir _site
+          cp -r index.html sw.js manifest.webmanifest css js icons _site/
+          mkdir _site/data && cp data/max.json _site/data/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+      - id: deploy
+        uses: actions/deploy-pages@v4

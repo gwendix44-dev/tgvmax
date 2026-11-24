@@ -1,0 +1,94 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { Network, destinations, journeys, roundTrips, evalAlert, search, DAY } from '../js/engine.js';
+import { answer } from '../js/chat.js';
+import { encryptJSON, decryptJSON } from '../js/crypto.js';
+import { COORDS, parisTransfer } from '../js/stations.js';
+
+const net = new Network(JSON.parse(readFileSync(new URL('../data/max.json', import.meta.url), 'utf8')));
+const di = net.dates.indexOf('2026-12-04') >= 0 ? net.dates.indexOf('2026-12-04') : 8;
+
+test('toutes les gares du jeu de données ont des coordonnées', () => {
+  const missing = net.stations.filter((s) => !COORDS[s]);
+  assert.deepEqual(missing, []);
+});
+
+test('chaque tronçon d’un trajet a une place MAX et chaque correspondance respecte le minimum', () => {
+  const ds = destinations(net, { from: 'NANTES', di, cfg: { minConn: 60, maxChanges: 2 } });
+  assert.ok(ds.length > 10);
+  for (const d of ds) for (const j of d.journeys) {
+    j.legs.forEach((l, i) => {
+      assert.ok(net.hasRow(l.di, l.ti, l.o, l.d), 'tronçon sans place MAX');
+      const p = j.legs[i - 1];
+      if (p && !(p.ti === l.ti && p.di === l.di)) assert.ok(l.s - p.e >= 60, `correspondance trop courte (${l.s - p.e} min)`);
+      if (p) assert.equal(p.d, l.o);
+    });
+    assert.ok(j.changes <= 2);
+  }
+});
+
+test('changement de gare à Paris : temps de transfert allongé automatiquement', () => {
+  assert.ok(parisTransfer('MP', 'GL') >= 40);
+  const js = search(net, { origins: [net.id('NANTES')], di, maxChanges: 2, minConn: 30, depFrom: 240, depTo: 1439 });
+  for (const j of js) j.legs.forEach((l, i) => {
+    const p = j.legs[i - 1];
+    if (p && p.ptD && l.ptO && p.ptD !== l.ptO) assert.ok(l.s - p.e >= parisTransfer(p.ptD, l.ptO) + 30);
+  });
+});
+
+test('allers-retours dans la journée : 4 tronçons possibles, temps sur place respecté, retour le même jour', () => {
+  const plans = roundTrips(net, { from: 'NANTES', di, cfg: { minStay: 180 }, maxChanges: 1 });
+  assert.ok(plans.length > 0);
+  for (const p of plans) for (const it of p.items) {
+    assert.ok(it.stay >= 180);
+    assert.ok(it.back.e < (di + 1) * DAY);
+  }
+});
+
+test('trains de nuit pris en compte et enchaînés avec un train de jour', () => {
+  let found = null;
+  for (let d = 0; d < net.dates.length && !found; d++) {
+    const ds = destinations(net, { from: 'NANTES', di: d, cfg: { maxChanges: 2 } });
+    for (const x of ds) for (const j of x.journeys) if (j.night && j.legs.some((l) => !l.night)) { found = j; break; }
+  }
+  assert.ok(found, 'aucun voyage jour + nuit trouvé');
+});
+
+test('heure de départ minimum par défaut : 4 h', () => {
+  const ds = destinations(net, { from: 'NANTES', di, cfg: {} });
+  for (const d of ds) for (const j of d.journeys) assert.ok(j.legs.every((l) => l.dep >= 240));
+});
+
+test('alerte : seul le créneau exact déclenche, les alternatives sont marquées', () => {
+  const a = { mode: 'weekday', weekday: -1, from: 'NANTES', to: 'PARIS (intramuros)', alts: false, timeMode: 'depart', from1: 480, from2: 600, maxChanges: 1 };
+  const r = evalAlert(net, a, {});
+  for (const m of r) {
+    const clock = m.journey.s % DAY;
+    assert.equal(m.exact, clock >= 480 && clock <= 600);
+  }
+});
+
+test('alerte en mode « arrivée visée »', () => {
+  const a = { mode: 'weekday', weekday: -1, from: 'NANTES', to: 'PARIS (intramuros)', alts: false, timeMode: 'arrive', to1: 600, to2: 780, maxChanges: 1 };
+  for (const m of evalAlert(net, a, {})) {
+    const clock = m.journey.e % DAY;
+    assert.equal(m.exact, clock >= 600 && clock <= 780);
+  }
+});
+
+test('chat : ne renvoie que de vrais trajets et le dit quand il n’y en a pas', () => {
+  const ctx = { today: '2026-11-24' };
+  const r = answer(net, 'Donne-moi trois destinations pour le 4 décembre, accessibles en 100 % TGV MAX, aller-retour dans la journée.', {}, ctx);
+  assert.ok(r.cards.length > 0 && r.cards.length <= 3);
+  for (const c of r.cards) { assert.ok(c.plan.stay >= 120); assert.ok(c.plan.out.legs.every((l) => net.hasRow(l.di, l.ti, l.o, l.d))); }
+  const far = answer(net, 'trois destinations pour le 10 mars', {}, ctx);
+  assert.equal(far.cards.length, 0);
+  assert.match(far.text, /pas encore ouvert/);
+});
+
+test('chiffrement des alertes (aller-retour)', async () => {
+  const p = await encryptJSON({ a: 1, b: 'é' }, 'secret');
+  assert.deepEqual(await decryptJSON(p, 'secret'), { a: 1, b: 'é' });
+  await assert.rejects(decryptJSON(p, 'autre'));
+});

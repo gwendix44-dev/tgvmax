@@ -66,6 +66,10 @@ function welcome() {
     h('p', { class: 'tiny muted' }, 'Tu pourras la changer à tout moment dans Plus → Réglages.')));
 }
 
+// ---------- Source des données ----------
+const PLANNER = 'https://www.maxjeune-tgvinoui.sncf/sncf-connect/max-planner';
+const sourceNote = () => h('div', { class: 'tiny muted', style: 'margin:10px 2px' }, 'Source : données ouvertes SNCF, mises à jour quelques fois par jour. Elles ne contiennent ni les OUIGO ni certains trains que MAX JEUNE ouvre en plus : la liste peut être plus courte que dans l’appli SNCF. Avant de réserver, vérifie dans le ', h('a', { href: PLANNER, target: '_blank', rel: 'noopener' }, 'Max Planner'), '.');
+
 // ---------- Aides communes ----------
 const pickFrom = (cur, cb) => pickStation(R.meta.stations.filter((_, i) => R.meta.outDeg[i] > 0), R.meta.outDeg.filter((d) => d > 0), cur, cb, 'Gare de départ');
 const pickAny = (cur, cb, t) => pickStation(R.meta.stations, R.meta.outDeg, cur, cb, t);
@@ -124,7 +128,7 @@ function destResults() {
   if (!res.length) return h('div', { class: 'empty' }, D.mode === 'one' ? 'Aucune place MAX à cette date avec ces critères.' : 'Aucun aller-retour avec places MAX sur tous les tronçons. Essaie une autre date, plus de correspondances ou un temps sur place plus court (Plus → Réglages).');
   const info = h('div', { class: 'small muted', style: 'margin:2px 2px 6px' }, `${res.length} destination${res.length > 1 ? 's' : ''} · ${fmtDay(D.date)}`);
   if (D.view === 'map') return [info, mapView(res)];
-  return [info, ...res.map((r) => (D.mode === 'one' ? destRow(r) : rtRow(r)))];
+  return [info, ...res.map((r) => (D.mode === 'one' ? destRow(r) : rtRow(r))), sourceNote()];
 }
 function destRow(r) {
   const f = r.fastest;
@@ -244,6 +248,7 @@ function tripResults() {
   else out.push(h('div', { class: 'banner warn' }, 'Rien dans ton créneau exact.'), nextBox());
   if (alt.length) out.push(h('h2', {}, `Depuis / vers une gare proche · ${alt.length}`), ...alt.slice(0, 12).map((j) => journeyCard(j, R.meta)));
   if (near.length) out.push(h('h2', {}, `Alternatives proches (± ${fmtDur(S.settings.nearby)}) · ${near.length}`), ...near.slice(0, 12).map((j) => journeyCard(j, R.meta, { dim: true })));
+  out.push(sourceNote());
   return out;
 }
 

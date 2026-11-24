@@ -28,3 +28,6 @@ npm run data     # télécharge et compacte le jeu de données → data/max.json
 npm test         # tests du moteur
 python3 -m http.server 8000
 ```
+
+## Fraîcheur des données
+Le jeu de données ouvert SNCF « tgvmax » liste les trains MAX JEUNE / MAX SENIOR et il est publié **une fois par jour, en début de matinée** (≈ 05h25 UTC). Le Max Planner de SNCF Connect est en temps réel : des places y sont ajoutées ou prises toute la journée, et les OUIGO n'existent pas dans le jeu ouvert. L'appli affiche donc la date des données SNCF et renvoie vers le Max Planner pour vérifier avant de réserver. L'API du Max Planner est protégée par un système anti-robot : elle n'est pas utilisée.

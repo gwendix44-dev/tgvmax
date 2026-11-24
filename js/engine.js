@@ -13,7 +13,7 @@ export const cfgOf = (c = {}) => ({ ...DEFAULTS, ...c });
 
 export class Network {
   constructor(snap) {
-    this.generated = snap.generated; this.dates = snap.dates; this.stations = snap.stations; this.axes = snap.axes;
+    this.generated = snap.generated; this.sourceUpdated = snap.sourceUpdated || snap.generated; this.dates = snap.dates; this.stations = snap.stations; this.axes = snap.axes;
     this.sid = new Map(snap.stations.map((s, i) => [s, i]));
     const r = snap.rows, n = r.length / 6;
     const from = snap.stations.map(() => []);

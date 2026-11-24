@@ -8,7 +8,7 @@ const ops = {
     const res = await fetch(url, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`Données indisponibles (HTTP ${res.status})`);
     net = new Network(await res.json());
-    return { generated: net.generated, dates: net.dates, stations: net.stations, outDeg: net.outDeg };
+    return { generated: net.generated, sourceUpdated: net.sourceUpdated, dates: net.dates, stations: net.stations, outDeg: net.outDeg };
   },
   destinations: (a) => destinations(net, { ...a, di: net.dayIndex(a.date) }),
   journeys: (a) => journeys(net, { ...a, di: net.dayIndex(a.date) }),

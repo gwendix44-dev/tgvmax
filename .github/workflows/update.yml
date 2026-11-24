@@ -2,13 +2,12 @@ name: Mise à jour des données et alertes
 
 on:
   schedule:
-    # Le jeu de données SNCF est mis à jour en début de matinée : plusieurs relectures (UTC).
-    - cron: '35 4 * * *'
-    - cron: '30 5 * * *'
-    - cron: '30 6 * * *'
-    - cron: '30 8 * * *'
-    - cron: '30 12 * * *'
-    - cron: '30 17 * * *'
+    # Le jeu de données SNCF (MAX JEUNE / MAX SENIOR) est publié une fois par jour, vers 05h25 UTC : relectures juste après, puis filet de sécurité.
+    - cron: '40 5 * * *'
+    - cron: '10 6 * * *'
+    - cron: '40 6 * * *'
+    - cron: '40 7 * * *'
+    - cron: '40 10 * * *'
   workflow_dispatch:
   push:
     branches: [main]

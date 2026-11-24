@@ -33,14 +33,14 @@ const fmtDay = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR',
 const fmtShort = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const WD = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const name = (s) => pretty(s);
-const stale = () => R.meta && Date.now() - Date.parse(R.meta.generated) > 30 * 3600e3;
+const stale = () => R.meta && Date.now() - Date.parse(R.meta.sourceUpdated || R.meta.generated) > 36 * 3600e3;
 
 // ---------- Squelette ----------
 const app = document.getElementById('app');
 const TABS = [['dest', 'Destinations', 'map'], ['trip', 'Trajets', 'route'], ['alerts', 'Alertes', 'bell'], ['chat', 'Assistant', 'chat'], ['more', 'Plus', 'more']];
 function render() {
   const top = h('header', { class: 'top' }, h('h1', {}, 'TGV MAX'), R.meta && h('span', { class: 'fresh' + (stale() ? ' stale' : '') },
-    `Places du ${new Date(R.meta.generated).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${stale() ? ' · mise à jour en retard' : ''}`));
+    `Données SNCF du ${new Date(R.meta.sourceUpdated || R.meta.generated).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${stale() ? ' · mise à jour en retard' : ''}`));
   const main = h('main');
   if (R.meta && !S.settings.homeSet && !R.err) { app.replaceChildren(top, welcome()); return; }
   if (R.err) main.append(h('div', { class: 'card' }, h('b', {}, 'Données indisponibles'), h('p', { class: 'muted' }, R.err), h('button', { class: 'btn primary', onclick: boot }, 'Réessayer')));
@@ -68,7 +68,7 @@ function welcome() {
 
 // ---------- Source des données ----------
 const PLANNER = 'https://www.maxjeune-tgvinoui.sncf/sncf-connect/max-planner';
-const sourceNote = () => h('div', { class: 'tiny muted', style: 'margin:10px 2px' }, 'Source : données ouvertes SNCF, mises à jour quelques fois par jour. Elles ne contiennent ni les OUIGO ni certains trains que MAX JEUNE ouvre en plus : la liste peut être plus courte que dans l’appli SNCF. Avant de réserver, vérifie dans le ', h('a', { href: PLANNER, target: '_blank', rel: 'noopener' }, 'Max Planner'), '.');
+const sourceNote = () => h('div', { class: 'tiny muted', style: 'margin:10px 2px' }, 'Données officielles MAX JEUNE de la SNCF, publiées une fois par jour en début de matinée. Des places sont ajoutées ou prises ensuite dans la journée et les OUIGO n’y figurent pas : la liste peut différer de SNCF Connect, qui est en temps réel. Avant de réserver, vérifie dans le ', h('a', { href: PLANNER, target: '_blank', rel: 'noopener' }, 'Max Planner'), '.');
 
 // ---------- Aides communes ----------
 const pickFrom = (cur, cb) => pickStation(R.meta.stations.filter((_, i) => R.meta.outDeg[i] > 0), R.meta.outDeg.filter((d) => d > 0), cur, cb, 'Gare de départ');

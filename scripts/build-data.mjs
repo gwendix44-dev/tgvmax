@@ -44,7 +44,10 @@ for (const r of raw) {
 }
 rows.sort((a, b) => a[0] - b[0] || a[4] - b[4] || a[1] - b[1]);
 
-const snap = { v: 1, generated: new Date().toISOString(), source: 'data.sncf.com/tgvmax', dates, stations, axes, trains, rows: rows.flat() };
+// Date de la dernière mise à jour du jeu de données par la SNCF (quotidienne, début de matinée).
+let sourceUpdated = null;
+try { const m = await (await fetch(API, { headers: { accept: 'application/json' } })).json(); sourceUpdated = m?.metas?.default?.data_processed || m?.metas?.default?.modified || null; } catch {}
+const snap = { v: 1, generated: new Date().toISOString(), sourceUpdated, source: 'data.sncf.com/tgvmax', dates, stations, axes, trains, rows: rows.flat() };
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify(snap));
 console.log(`OK ${rows.length} places MAX, ${stations.length} gares, ${dates.length} jours (${dates[0]} → ${dates.at(-1)}) → ${out}`);

@@ -1,6 +1,6 @@
 // Application TGV MAX : vues, état local (aucun compte), appels au worker de calcul.
 import { h, icon, toast, openSheet, pickStation, dateStrip, journeyCard } from './ui.js';
-import { pretty, fmtTime, fmtDur, COORDS, OUTLINE, km } from './stations.js';
+import { pretty, fmtTime, fmtDur, COORDS, OUTLINE, km, TER } from './stations.js';
 import { DEFAULTS } from './engine.js';
 import { enablePush, pushState, syncToRepo, repoGuess } from './sync.js';
 import { randomSecret } from './crypto.js';
@@ -42,6 +42,7 @@ function render() {
   const top = h('header', { class: 'top' }, h('h1', {}, 'TGV MAX'), R.meta && h('span', { class: 'fresh' + (stale() ? ' stale' : '') },
     `Places du ${new Date(R.meta.generated).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${stale() ? ' · mise à jour en retard' : ''}`));
   const main = h('main');
+  if (R.meta && !S.settings.homeSet && !R.err) { app.replaceChildren(top, welcome()); return; }
   if (R.err) main.append(h('div', { class: 'card' }, h('b', {}, 'Données indisponibles'), h('p', { class: 'muted' }, R.err), h('button', { class: 'btn primary', onclick: boot }, 'Réessayer')));
   else if (!R.meta) main.append(h('div', { class: 'empty' }, h('span', { class: 'spin' }), ' Chargement des places MAX…'));
   else main.append(({ dest: viewDest, trip: viewTrip, alerts: viewAlerts, chat: viewChat, more: viewMore })[R.tab]());
@@ -53,6 +54,17 @@ function render() {
 }
 function go(tab) { R.tab = tab; if (tab === 'alerts' && S.unread) { S.unread = 0; save(); } render(); }
 const rerender = () => { const m = document.querySelector('main'); R.keepScroll = m ? m.scrollTop : 0; render(); };
+
+// ---------- Écran d'accueil : ville de départ ----------
+function welcome() {
+  const choose = (st) => { S.settings.home = st; S.settings.homeSet = true; D.from = null; T.from = null; D.res = null; T.res = null; save(); render(); };
+  const quick = ['NANTES', 'RENNES', 'ANGERS SAINT LAUD', 'PARIS (intramuros)', 'LYON (intramuros)', 'BORDEAUX ST JEAN', 'LILLE (intramuros)', 'TOULOUSE MATABIAU', 'MARSEILLE ST CHARLES', 'STRASBOURG', 'MONTPELLIER SAINT ROCH', 'NICE VILLE'].filter((x) => R.meta.stations.includes(x));
+  return h('main', {}, h('div', { class: 'card' }, h('h2', { style: 'margin-top:0' }, 'Bienvenue 👋'),
+    h('p', {}, 'Où habites-tu ? Ta gare de départ sert de référence : l’appli cherche d’abord les places MAX au départ de cette gare. Des gares de secours (TER direct de 1 h 30 maximum) ne sont proposées qu’à défaut.'),
+    h('div', { class: 'chips', style: 'flex-wrap:wrap;gap:8px;margin:10px 0' }, quick.map((x) => h('button', { class: 'btn', onclick: () => choose(x) }, name(x)))),
+    h('button', { class: 'btn primary', onclick: () => pickFrom(S.settings.home, choose) }, 'Autre gare…'),
+    h('p', { class: 'tiny muted' }, 'Tu pourras la changer à tout moment dans Plus → Réglages.')));
+}
 
 // ---------- Aides communes ----------
 const pickFrom = (cur, cb) => pickStation(R.meta.stations.filter((_, i) => R.meta.outDeg[i] > 0), R.meta.outDeg.filter((d) => d > 0), cur, cb, 'Gare de départ');
@@ -375,15 +387,16 @@ function viewMore() {
         field('Alternatives proches', sel([[60, '± 1 h'], [120, '± 2 h'], [180, '± 3 h'], [240, '± 4 h']], st.nearby, (v) => set('nearby', +v)))),
       h('p', { class: 'tiny muted' }, 'Le temps de correspondance s’allonge automatiquement lors d’un changement de gare à Paris (gare déduite de la ligne).')));
 
-  const alts = R.meta.stations.filter((s) => s !== st.home && COORDS[s] && COORDS[st.home] && km(st.home, s) <= st.altRadiusOrigin && R.meta.outDeg[R.meta.stations.indexOf(s)] >= 20);
+  const terOf = (home) => TER.filter(([x, y]) => (x === home || y === home) && R.meta.stations.includes(x === home ? y : x)).map(([x, y, m]) => [x === home ? y : x, m]).sort((p, q) => p[1] - q[1]);
+  const alts = terOf(st.home);
   el.append(h('h2', {}, 'Gares alternatives'),
     h('div', { class: 'card' },
       h('div', { class: 'row' }, h('span', { class: 'grow small' }, 'Élargir aux gares proches (départ et arrivée)'), h('input', { type: 'checkbox', class: 'switch', checked: st.useAlts, onchange: (e) => { set('useAlts', e.target.checked); rerender(); } })),
       st.useAlts && [h('div', { class: 'sp' }), h('div', { class: 'row wrap' },
-        field('Rayon au départ', sel([[60, '60 km'], [110, '110 km'], [160, '160 km'], [250, '250 km']], st.altRadiusOrigin, (v) => { set('altRadiusOrigin', +v); rerender(); })),
+        field('TER direct max. au départ', sel([[45, '45 min'], [60, '1 h'], [90, '1 h 30'], [120, '2 h']], st.maxTer, (v) => { set('maxTer', +v); rerender(); })),
         field('Rayon à l’arrivée', sel([[25, '25 km'], [45, '45 km'], [80, '80 km']], st.altRadiusDest, (v) => set('altRadiusDest', +v)))),
-      alts.length > 0 && h('div', { class: 'small muted', style: 'margin:10px 0 2px' }, `Gares de départ autorisées autour de ${name(st.home)} :`),
-      ...alts.map((s) => h('div', { class: 'row', style: 'padding:6px 0' }, h('span', { class: 'grow small' }, `${name(s)} · ${Math.round(km(st.home, s))} km`), h('input', { type: 'checkbox', class: 'switch', checked: !st.altOff[s], onchange: (e) => { const o = { ...st.altOff }; if (e.target.checked) delete o[s]; else o[s] = 1; set('altOff', o); } })))]));
+      h('div', { class: 'small muted', style: 'margin:10px 0 2px' }, alts.length ? `Gares de départ de secours depuis ${name(st.home)} (TER direct, durées estimées) :` : `Aucun TER direct connu depuis ${name(st.home)} : seule cette gare est utilisée.`),
+      ...alts.map(([s, m]) => h('div', { class: 'row', style: 'padding:6px 0' + (m > st.maxTer ? ';opacity:.45' : '') }, h('span', { class: 'grow small' }, `${name(s)} · ≈ ${fmtDur(m)}${m > st.maxTer ? ' (au-delà du maximum)' : ''}`), h('input', { type: 'checkbox', class: 'switch', checked: !st.altOff[s], onchange: (e) => { const o = { ...st.altOff }; if (e.target.checked) delete o[s]; else o[s] = 1; set('altOff', o); } })))]));
 
   el.append(h('h2', {}, 'Notifications'), notifCard());
   el.append(h('h2', {}, 'Données'), h('div', { class: 'card small' },
@@ -416,7 +429,7 @@ async function syncNow(manual) {
   try {
     const reg = await navigator.serviceWorker.ready; const sub = (await reg.pushManager.getSubscription())?.toJSON();
     if (!sub) throw new Error('Active d’abord les notifications sur cet appareil.');
-    const c = S.settings, cfg = { home: c.home, earliest: c.earliest, latest: c.latest, minConn: c.minConn, maxChanges: c.maxChanges, maxWait: c.maxWait, nearby: c.nearby, useAlts: c.useAlts, altRadiusOrigin: c.altRadiusOrigin, altRadiusDest: c.altRadiusDest, altOff: c.altOff, allowNight: c.allowNight };
+    const c = S.settings, cfg = { home: c.home, earliest: c.earliest, latest: c.latest, minConn: c.minConn, maxChanges: c.maxChanges, maxWait: c.maxWait, nearby: c.nearby, useAlts: c.useAlts, maxTer: c.maxTer, altRadiusDest: c.altRadiusDest, altOff: c.altOff, allowNight: c.allowNight };
     await syncToRepo({ repo, token, secret, deviceId: S.deviceId, sub, alerts: S.alerts, cfg });
     S.lastSync = new Date().toISOString(); S.syncErr = null; if (manual) toast('Alertes synchronisées');
   } catch (e) { S.syncErr = e.message; }

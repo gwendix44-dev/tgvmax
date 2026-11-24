@@ -1,13 +1,13 @@
 // Moteur TGV MAX : lecture du snapshot, recherche de trajets (correspondances partout en France),
 // allers-retours, trains de nuit, gares alternatives et alertes. Pur JS, sans DOM : tourne dans le
 // navigateur (Web Worker) comme dans Node (tâche planifiée).
-import { COORDS, altStations, parisTerminal, parisTransfer, PARIS, CLUSTERS, LINKS, fmtTime, pretty } from './stations.js';
+import { km, COORDS, altStations, terAlts, parisTerminal, parisTransfer, PARIS, CLUSTERS, LINKS, fmtTime, pretty } from './stations.js';
 
 export const DAY = 1440;
 
 export const DEFAULTS = {
   home: 'NANTES', earliest: 240, latest: 1439, minConn: 60, maxChanges: 2, maxWait: 360, minStay: 120,
-  nearby: 180, useAlts: true, altRadiusOrigin: 110, altRadiusDest: 45, altOff: {}, allowNight: true,
+  nearby: 180, useAlts: true, maxTer: 90, altRadiusDest: 45, altOff: {}, allowNight: true,
 };
 export const cfgOf = (c = {}) => ({ ...DEFAULTS, ...c });
 
@@ -23,10 +23,14 @@ export class Network {
     this.cl = snap.stations.map((_, i) => i); // identifiant de ville (gares équivalentes)
     for (const c of CLUSTERS) { const ids = c.map((x) => this.sid.get(x)).filter((x) => x !== undefined); for (const i of ids) this.cl[i] = ids[0]; }
     this.link = new Map();
+    for (const c of CLUSTERS) {
+      const ids = c.map((x) => this.sid.get(x)).filter((x) => x !== undefined);
+      for (const i of ids) this.hub[i] = [i, ...ids.filter((x) => x !== i)];
+      for (const x of ids) for (const y of ids) if (x !== y) this.link.set(x * 512 + y, { min: 40, how: 'transport local' });
+    }
     for (const [a, b, min, how] of LINKS) {
       const x = this.sid.get(a), y = this.sid.get(b); if (x === undefined || y === undefined) continue;
       this.link.set(x * 512 + y, { min, how }); this.link.set(y * 512 + x, { min, how });
-      this.hub[x] = [x, y]; this.hub[y] = [y, x];
     }
     for (let i = 0; i < n; i++) {
       const b = i * 6, di = r[b], ti = r[b + 1], o = r[b + 2], d = r[b + 3], dep = r[b + 4], arr = r[b + 5];
@@ -88,7 +92,7 @@ export function search(net, o) {
     const consider = (k, prefix, leg) => {
       if (opt.sameDay && leg.e >= base + DAY) return;
       if (leg.e - start.s > opt.maxDur) return;
-      if (prefix.length && opt.origins.includes(leg.d)) return; // ne repasse pas par une gare de départ (ex. Angers → Nantes)
+      if (opt.origins.includes(leg.d)) return; // ne repasse pas par une gare de départ (ex. Angers → Nantes)
       if (prefix.some((l) => net.cl[l.o] === net.cl[leg.d])) return; // pas de détour pour revenir dans une ville déjà visitée
       if (prefix.length) {
         let j = prefix.length - 1;
@@ -133,13 +137,23 @@ export function search(net, o) {
 }
 
 // ---------- Gares alternatives ----------
-export function resolveStations(net, name, { alts = true, radius = 100, off = {}, role = 'dest' } = {}) {
+export function resolveStations(net, name, { alts = true, radius = 45, maxTer = 90, off = {}, role = 'dest' } = {}) {
   const id = net.id(name);
   if (id === undefined) return [];
   const res = [{ id, name, access: null }];
   if (!alts) return res;
-  const filter = (s) => net.sid.has(s) && !off[s] && (role === 'dest' || net.outDeg[net.id(s)] >= 20);
-  for (const a of altStations(name, radius, net.stations, filter)) res.push({ id: net.id(a.name), name: a.name, access: { min: a.min, how: a.how, km: a.km, main: name } });
+  // gares du même pôle (Paris/Massy/Roissy…, Nîmes Centre/Pont du Gard…)
+  for (const [a, b, min, how] of LINKS) {
+    const o = a === name ? b : b === name ? a : null;
+    if (o && net.sid.has(o) && !off[o] && !res.some((r) => r.name === o)) res.push({ id: net.id(o), name: o, access: { min, how, km: Math.round(km(name, o)), main: name } });
+  }
+  const ok = (s) => net.sid.has(s) && !off[s] && !res.some((r) => r.name === s);
+  if (role === 'dest') {
+    for (const a of altStations(name, radius, net.stations, ok)) res.push({ id: net.id(a.name), name: a.name, access: { min: a.min, how: a.how, km: a.km, main: name } });
+  } else {
+    // départ : uniquement des gares reliées par un TER direct de durée raisonnable
+    for (const a of terAlts(name, maxTer, net.stations, (s) => ok(s) && net.outDeg[net.id(s)] >= 20)) res.push({ id: net.id(a.name), name: a.name, access: { min: a.min, how: a.how, km: a.km, main: name } });
+  }
   return res;
 }
 const accessMap = (arr) => new Map(arr.filter((x) => x.access).map((x) => [x.id, x.access]));
@@ -153,7 +167,7 @@ function annotate(j, oAcc, dAcc) {
 // ---------- Destinations depuis une gare ----------
 export function destinations(net, o) {
   const cfg = cfgOf(o.cfg);
-  const origins = resolveStations(net, o.from, { alts: cfg.useAlts, radius: cfg.altRadiusOrigin, off: cfg.altOff, role: 'origin' });
+  const origins = resolveStations(net, o.from, { alts: cfg.useAlts, maxTer: cfg.maxTer, off: cfg.altOff, role: 'origin' });
   const oAcc = accessMap(origins), ids = origins.map((x) => x.id);
   const js = search(net, { origins: ids, di: o.di, depFrom: o.depFrom ?? cfg.earliest, depTo: o.depTo ?? cfg.latest, maxChanges: o.maxChanges ?? cfg.maxChanges,
     minConn: cfg.minConn, maxWait: cfg.maxWait, earliest: cfg.earliest, allowNight: o.allowNight ?? cfg.allowNight, sameDay: !!o.sameDay, arrFrom: o.arrFrom, arrTo: o.arrTo });
@@ -185,7 +199,7 @@ export function destinations(net, o) {
 // ---------- Trajets d'une gare à une autre (avec alternatives) ----------
 export function journeys(net, o) {
   const cfg = cfgOf(o.cfg);
-  const origins = resolveStations(net, o.from, { alts: cfg.useAlts, radius: cfg.altRadiusOrigin, off: cfg.altOff, role: 'origin' });
+  const origins = resolveStations(net, o.from, { alts: cfg.useAlts, maxTer: cfg.maxTer, off: cfg.altOff, role: 'origin' });
   const dests = resolveStations(net, o.to, { alts: cfg.useAlts, radius: cfg.altRadiusDest, off: cfg.altOff, role: 'dest' });
   const oAcc = accessMap(origins), dAcc = accessMap(dests);
   const near = o.nearby ?? cfg.nearby;
@@ -214,7 +228,7 @@ export function roundTrips(net, o) {
   const plans = roundTripsFrom(net, o, o.from);
   if (!cfg.useAlts || o.noAlts) return plans;
   const seen = new Set(plans.map((p) => p.x));
-  for (const a of resolveStations(net, o.from, { alts: true, radius: cfg.altRadiusOrigin, off: cfg.altOff, role: 'origin' }).slice(1)) {
+  for (const a of resolveStations(net, o.from, { alts: true, maxTer: cfg.maxTer, off: cfg.altOff, role: 'origin' }).slice(1)) {
     for (const p of roundTripsFrom(net, o, a.name)) {
       if (seen.has(p.x)) continue;
       for (const it of p.items) { it.altFrom = a.access; it.out.altFrom = a.access; it.back.altTo = a.access; }
@@ -274,7 +288,7 @@ export const alertWindow = (a) => (a.timeMode === 'arrive'
 export function evalAlert(net, a, cfgIn) {
   const cfg = cfgOf(cfgIn), w = alertWindow(a), res = [];
   if (alertStatus(net, a).state === 'past') return res;
-  const origins = resolveStations(net, a.from, { alts: !!a.alts && cfg.useAlts, radius: cfg.altRadiusOrigin, off: cfg.altOff, role: 'origin' });
+  const origins = resolveStations(net, a.from, { alts: !!a.alts && cfg.useAlts, maxTer: cfg.maxTer, off: cfg.altOff, role: 'origin' });
   const dests = resolveStations(net, a.to, { alts: !!a.alts && cfg.useAlts, radius: cfg.altRadiusDest, off: cfg.altOff, role: 'dest' });
   const oAcc = accessMap(origins), dAcc = accessMap(dests), near = a.nearby ?? cfg.nearby;
   for (const di of alertDates(net, a)) {

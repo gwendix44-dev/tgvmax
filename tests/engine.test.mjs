@@ -22,7 +22,7 @@ test('chaque tronçon d’un trajet a une place MAX et chaque correspondance res
       assert.ok(net.hasRow(l.di, l.ti, l.o, l.d), 'tronçon sans place MAX');
       const p = j.legs[i - 1];
       if (p && !(p.ti === l.ti && p.di === l.di)) assert.ok(l.s - p.e >= 60, `correspondance trop courte (${l.s - p.e} min)`);
-      if (p) assert.equal(p.d, l.o);
+      if (p) assert.ok(p.d === l.o || net.cl[p.d] === net.cl[l.o], 'changement de gare hors pôle');
     });
     assert.ok(j.changes <= 2);
   }
@@ -102,4 +102,14 @@ test('Le Havre / Rouen via Massy TGV → Massy Palaiseau, pas de détour Pont du
   const nm = journeys(net, { cfg, from: 'NANTES', to: 'NIMES CENTRE', di, depFrom: 240, depTo: 1439, nearby: 0, maxChanges: 2 });
   for (const j of nm) assert.ok(!j.legs.slice(0, -1).some((l) => /NIMES/.test(net.name(l.o))), 'pas de détour par Nîmes');
   assert.ok(nextDates(net, { cfg, from: 'LILLE (intramuros)', to: 'BORDEAUX ST JEAN', di: 0, depFrom: 240, depTo: 1439 }).length > 0);
+});
+
+test('gares de secours au départ : uniquement des TER directs ≤ durée max ; pôle Île-de-France regroupé', async () => {
+  const { resolveStations } = await import('../js/engine.js');
+  const names = (n, o) => resolveStations(net, n, { role: 'origin', maxTer: 90, ...o }).map((r) => r.name);
+  assert.ok(!names('ANGERS SAINT LAUD').includes('RENNES') && !names('ANGERS SAINT LAUD').includes('POITIERS'));
+  assert.ok(names('NANTES').includes('ANGERS SAINT LAUD'));
+  assert.ok(!names('NANTES', { maxTer: 30 }).includes('ANGERS SAINT LAUD'));
+  const paris = resolveStations(net, 'PARIS (intramuros)', { role: 'dest' }).map((r) => r.name);
+  for (const s of ['MASSY TGV', 'MASSY PALAISEAU', 'MARNE LA VALLEE CHESSY', 'AEROPORT ROISSY CDG 2 TGV']) assert.ok(paris.includes(s), s);
 });

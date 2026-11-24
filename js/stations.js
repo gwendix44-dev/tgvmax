@@ -149,11 +149,54 @@ export function parisTransfer(a, b) {
 export const fmtTime = (m) => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); };
 export const fmtDur = (m) => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h}h${String(r).padStart(2, '0')}` : `${r} min`; };
 
-// Gares d'une même ville : atteindre l'une ou l'autre revient au même (jamais d'aller-retour entre elles).
+// Gares d'une même ville / d'un même pôle : atteindre l'une ou l'autre revient au même (jamais d'aller-retour entre elles).
+export const IDF = ['PARIS (intramuros)', 'PARIS MONTPARNASSE VAUGIRARD', 'MASSY TGV', 'MASSY PALAISEAU', 'MARNE LA VALLEE CHESSY', 'AEROPORT ROISSY CDG 2 TGV', 'VERSAILLES CHANTIERS'];
 export const CLUSTERS = [
-  ['NIMES CENTRE', 'NIMES PONT DU GARD'], ['LYON (intramuros)', 'LYON ST EXUPERY TGV.'], ['MONTPELLIER SAINT ROCH', 'MONTPELLIER SUD DE FRANCE'],
+  IDF, ['NIMES CENTRE', 'NIMES PONT DU GARD'], ['LYON (intramuros)', 'LYON ST EXUPERY TGV.'], ['MONTPELLIER SAINT ROCH', 'MONTPELLIER SUD DE FRANCE'],
   ['AVIGNON CENTRE', 'AVIGNON TGV'], ['VALENCE VILLE', 'VALENCE TGV AUVERGNE RHONE ALPES'], ['MACON VILLE', 'MACON LOCHE TGV'],
-  ['BESANCON VIOTTE', 'BESANCON FRANCHE COMTE TGV'], ['MARSEILLE ST CHARLES', 'MARSEILLE BLANCARDE'], ['PARIS (intramuros)', 'PARIS MONTPARNASSE VAUGIRARD'],
+  ['BESANCON VIOTTE', 'BESANCON FRANCHE COMTE TGV'], ['MARSEILLE ST CHARLES', 'MARSEILLE BLANCARDE'], ['TOURS', 'ST PIERRE DES CORPS'],
 ];
-// Changements de gare possibles en correspondance (minutes de trajet hors MAX).
-export const LINKS = [['MASSY TGV', 'MASSY PALAISEAU', 25, 'RER B/C']];
+// Changements de gare au sein d'un pôle : [gare A, gare B, minutes de trajet hors MAX, moyen] (estimations).
+const IDF_T = { 'PARIS (intramuros)': { 'MASSY TGV': 40, 'MASSY PALAISEAU': 35, 'MARNE LA VALLEE CHESSY': 40, 'AEROPORT ROISSY CDG 2 TGV': 50, 'VERSAILLES CHANTIERS': 30, 'PARIS MONTPARNASSE VAUGIRARD': 10 },
+  'MASSY TGV': { 'MASSY PALAISEAU': 25, 'MARNE LA VALLEE CHESSY': 65, 'AEROPORT ROISSY CDG 2 TGV': 55, 'VERSAILLES CHANTIERS': 40 },
+  'MASSY PALAISEAU': { 'MARNE LA VALLEE CHESSY': 65, 'AEROPORT ROISSY CDG 2 TGV': 55, 'VERSAILLES CHANTIERS': 30 },
+  'MARNE LA VALLEE CHESSY': { 'AEROPORT ROISSY CDG 2 TGV': 35, 'VERSAILLES CHANTIERS': 75 }, 'AEROPORT ROISSY CDG 2 TGV': { 'VERSAILLES CHANTIERS': 80 },
+  'PARIS MONTPARNASSE VAUGIRARD': { 'MASSY TGV': 30, 'MASSY PALAISEAU': 30, 'VERSAILLES CHANTIERS': 20 } };
+const CITY_T = [['NIMES CENTRE', 'NIMES PONT DU GARD', 30, 'bus'], ['LYON (intramuros)', 'LYON ST EXUPERY TGV.', 35, 'tram Rhônexpress'], ['MONTPELLIER SAINT ROCH', 'MONTPELLIER SUD DE FRANCE', 20, 'tram'],
+  ['AVIGNON CENTRE', 'AVIGNON TGV', 15, 'navette'], ['VALENCE VILLE', 'VALENCE TGV AUVERGNE RHONE ALPES', 20, 'bus'], ['MACON VILLE', 'MACON LOCHE TGV', 20, 'bus'],
+  ['BESANCON VIOTTE', 'BESANCON FRANCHE COMTE TGV', 25, 'bus/TER'], ['MARSEILLE ST CHARLES', 'MARSEILLE BLANCARDE', 10, 'métro'], ['TOURS', 'ST PIERRE DES CORPS', 10, 'TER']];
+export const LINKS = [...CITY_T];
+for (const [a, row] of Object.entries(IDF_T)) for (const [b, m] of Object.entries(row)) LINKS.push([a, b, m, m <= 10 ? 'métro' : 'RER / train']);
+
+// TER directs (gares de secours au départ) : [gare A, gare B, durée en minutes (estimation)]. Sens identique dans les deux directions.
+export const TER = [
+  ['NANTES', 'ANGERS SAINT LAUD', 45], ['NANTES', 'ST NAZAIRE', 45], ['NANTES', 'LA ROCHE SUR YON', 40], ['NANTES', 'REDON', 55], ['NANTES', 'RENNES', 100], ['NANTES', 'LE CROISIC', 75],
+  ['ANGERS SAINT LAUD', 'LE MANS', 55], ['ANGERS SAINT LAUD', 'SAUMUR', 20], ['ANGERS SAINT LAUD', 'TOURS', 60], ['ANGERS SAINT LAUD', 'ST PIERRE DES CORPS', 55], ['ANGERS SAINT LAUD', 'LAVAL', 50], ['ANGERS SAINT LAUD', 'LA ROCHE SUR YON', 90],
+  ['RENNES', 'LAVAL', 35], ['RENNES', 'VITRE', 20], ['RENNES', 'ST BRIEUC', 65], ['RENNES', 'ST MALO', 55], ['RENNES', 'REDON', 40], ['RENNES', 'VANNES', 85], ['RENNES', 'LE MANS', 85], ['RENNES', 'DOL DE BRETAGNE', 40], ['RENNES', 'LAMBALLE', 55],
+  ['LE MANS', 'LAVAL', 45], ['LE MANS', 'TOURS', 60], ['LE MANS', 'SABLE SUR SARTHE', 25], ['LAVAL', 'SABLE SUR SARTHE', 25],
+  ['TOURS', 'SAUMUR', 35], ['TOURS', 'VENDOME VILLIERS SUR LOIR', 40], ['TOURS', 'POITIERS', 70], ['TOURS', 'LES AUBRAIS ORLEANS', 70], ['ST PIERRE DES CORPS', 'POITIERS', 65], ['ST PIERRE DES CORPS', 'VENDOME VILLIERS SUR LOIR', 30], ['ST PIERRE DES CORPS', 'CHATELLERAULT', 45],
+  ['POITIERS', 'FUTUROSCOPE', 15], ['POITIERS', 'CHATELLERAULT', 20], ['POITIERS', 'ST MAIXENT (DEUX SEVRES)', 25], ['POITIERS', 'NIORT', 50], ['POITIERS', 'ANGOULEME', 60], ['POITIERS', 'LA ROCHELLE VILLE', 85],
+  ['LA ROCHELLE VILLE', 'NIORT', 45], ['LA ROCHELLE VILLE', 'SURGERES', 20], ['NIORT', 'ST MAIXENT (DEUX SEVRES)', 15],
+  ['BORDEAUX ST JEAN', 'LIBOURNE', 30], ['BORDEAUX ST JEAN', 'ARCACHON', 55], ['BORDEAUX ST JEAN', 'LA TESTE', 50], ['BORDEAUX ST JEAN', 'BIGANOS FACTURE', 40], ['BORDEAUX ST JEAN', 'ANGOULEME', 80], ['BORDEAUX ST JEAN', 'AGEN', 80], ['BORDEAUX ST JEAN', 'MARMANDE', 60], ['BORDEAUX ST JEAN', 'DAX', 90],
+  ['TOULOUSE MATABIAU', 'MONTAUBAN VILLE BOURBON', 30], ['TOULOUSE MATABIAU', 'CARCASSONNE', 60], ['TOULOUSE MATABIAU', 'AGEN', 80],
+  ['MONTPELLIER SAINT ROCH', 'NIMES CENTRE', 30], ['MONTPELLIER SAINT ROCH', 'SETE', 25], ['MONTPELLIER SAINT ROCH', 'BEZIERS', 45], ['MONTPELLIER SAINT ROCH', 'NARBONNE', 65], ['MONTPELLIER SAINT ROCH', 'AGDE', 35], ['NIMES CENTRE', 'AVIGNON CENTRE', 30], ['NIMES CENTRE', 'ARLES', 30],
+  ['MARSEILLE ST CHARLES', 'AIX EN PROVENCE TGV', 40], ['MARSEILLE ST CHARLES', 'AVIGNON CENTRE', 75], ['MARSEILLE ST CHARLES', 'TOULON', 50], ['MARSEILLE ST CHARLES', 'ARLES', 50], ['MARSEILLE ST CHARLES', 'MIRAMAS', 35],
+  ['NICE VILLE', 'CANNES', 35], ['NICE VILLE', 'ANTIBES', 25], ['NICE VILLE', 'ST RAPHAEL VALESCURE', 70], ['TOULON', 'HYERES', 20],
+  ['LYON (intramuros)', 'VALENCE VILLE', 65], ['LYON (intramuros)', 'SAINT ETIENNE CHATEAUCREUX', 45], ['LYON (intramuros)', 'BOURG EN BRESSE', 40], ['LYON (intramuros)', 'MACON VILLE', 45], ['LYON (intramuros)', 'VALENCE TGV AUVERGNE RHONE ALPES', 60], ['GRENOBLE', 'VALENCE VILLE', 60], ['GRENOBLE', 'CHAMBERY CHALLES LES EAUX', 60],
+  ['DIJON VILLE', 'BEAUNE', 25], ['DIJON VILLE', 'CHALON SUR SAONE', 35], ['DIJON VILLE', 'DOLE VILLE', 30], ['DIJON VILLE', 'MONTBARD', 45], ['DIJON VILLE', 'BESANCON VIOTTE', 70], ['CHALON SUR SAONE', 'MACON VILLE', 35], ['BESANCON VIOTTE', 'DOLE VILLE', 30],
+  ['STRASBOURG', 'COLMAR', 35], ['STRASBOURG', 'SELESTAT', 25], ['STRASBOURG', 'SAVERNE', 25], ['STRASBOURG', 'MULHOUSE VILLE', 60], ['MULHOUSE VILLE', 'COLMAR', 20], ['MULHOUSE VILLE', 'BELFORT MONTBELIARD TGV', 30], ['STRASBOURG', 'SARREBOURG', 50],
+  ['METZ VILLE', 'NANCY', 40], ['METZ VILLE', 'THIONVILLE', 25], ['METZ VILLE', 'LORRAINE TGV', 25], ['METZ VILLE', 'LUXEMBOURG', 50], ['NANCY', 'LUNEVILLE', 25], ['NANCY', 'LORRAINE TGV', 20], ['NANCY', 'EPINAL', 50],
+  ['REIMS', 'CHAMPAGNE ARDENNE TGV', 15], ['REIMS', 'CHALONS EN CHAMPAGNE', 35], ['REIMS', 'RETHEL', 35], ['REIMS', 'CHARLEVILLE MEZIERES', 75],
+  ['LILLE (intramuros)', 'DOUAI', 30], ['LILLE (intramuros)', 'ARRAS', 40], ['LILLE (intramuros)', 'LENS', 40], ['LILLE (intramuros)', 'BETHUNE', 40], ['LILLE (intramuros)', 'VALENCIENNES', 40], ['LILLE (intramuros)', 'DUNKERQUE', 45], ['LILLE (intramuros)', 'HAZEBROUCK', 35], ['LILLE (intramuros)', 'TOURCOING', 20], ['LILLE (intramuros)', 'ROUBAIX', 15], ['LILLE (intramuros)', 'CALAIS FRETHUN', 75],
+  ['PARIS (intramuros)', 'LES AUBRAIS ORLEANS', 65], ['PARIS (intramuros)', 'MANTES LA JOLIE', 35], ['PARIS (intramuros)', 'VENDOME VILLIERS SUR LOIR', 85],
+  ['QUIMPER', 'ROSPORDEN', 25], ['QUIMPER', 'QUIMPERLE', 30], ['QUIMPER', 'LORIENT', 50], ['LORIENT', 'AURAY', 30], ['LORIENT', 'VANNES', 50], ['VANNES', 'AURAY', 20], ['BREST', 'LANDERNEAU', 25], ['BREST', 'MORLAIX', 55], ['MORLAIX', 'GUINGAMP', 50], ['ST BRIEUC', 'GUINGAMP', 25], ['ST BRIEUC', 'LAMBALLE', 15],
+];
+export function terAlts(name, maxMin, universe, filter = () => true) {
+  const set = new Set(universe), out = [];
+  for (const [a, b, m] of TER) {
+    const o = a === name ? b : b === name ? a : null;
+    if (!o || m > maxMin || !set.has(o) || !filter(o)) continue;
+    out.push({ name: o, min: m, how: 'TER direct', km: Math.round(km(name, o)) });
+  }
+  return out.sort((x, y) => x.min - y.min);
+}

@@ -222,7 +222,7 @@ async function runTrip() {
     const a = { from: T.from, to: T.to, date: T.date, cfg: S.settings, maxChanges: T.maxChanges, nearby: S.settings.nearby };
     if (arrive) { a.arrFrom = T.a1 ?? Math.max(0, T.t2 - 180); a.arrTo = T.t2; a.depFrom = S.settings.earliest; a.depTo = 1439; } else { a.depFrom = effFrom(T.date, T.t1); a.depTo = T.t2; }
     const r = await rpc('journeys', a); if (tok !== T.tok) return; T.res = r; T.next = null;
-    if (!r.some((j) => j.delta === 0)) { rpc('nextDates', { ...a, nearby: 0 }).then((n) => { if (tok === T.tok) { T.next = n; rerender(); } }).catch(() => {}); }
+    if (!r.some((j) => j.delta === 0)) { rpc('nextDates', { ...a, depFrom: arrive ? S.settings.earliest : T.t1, nearby: 0 }).then((n) => { if (tok === T.tok) { T.next = n; rerender(); } }).catch(() => {}); }
   } catch (e) { if (tok !== T.tok) return; T.err = e.message; }
   T.loading = false; rerender();
 }

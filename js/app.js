@@ -92,7 +92,8 @@ const alertBtn = (draft) => h('button', { class: 'btn sm', onclick: () => alertF
 // ---------- Destinations ----------
 function viewDest() {
   D.date ||= firstDate(); D.from ||= S.settings.home; D.depFrom ??= S.settings.earliest; D.depTo ??= S.settings.latest; D.maxChanges ??= S.settings.maxChanges;
-  const MODES = [['one', 'Aller simple'], ['rt', 'A/R journée'], ['rt1', 'A/R 1 nuit'], ['rt2', 'A/R 2 nuits']];
+  const MODES = [['one', 'Aller simple'], ['rt', 'A/R journée'], ['rt1', 'A/R 1 nuit'], ['rt2', 'A/R 2 nuits'], ['rtn', 'Nuit + journée']];
+  D.minStay ??= S.settings.minStay;
   const el = h('div', {},
     h('div', { class: 'row' }, h('div', { class: 'grow' }, picker('Départ', name(D.from), () => pickFrom(D.from, (s) => { D.from = s; runDest(); }))),
       h('button', { class: 'btn', onclick: () => { D.from = S.settings.home; runDest(); } }, name(S.settings.home))),
@@ -104,18 +105,24 @@ function viewDest() {
         field('Départ dès', timeIn(D.depFrom, (v) => { D.depFrom = v; runDest(); })), field('Départ avant', timeIn(D.depTo, (v) => { D.depTo = v; runDest(); })),
         field('Correspondances', sel(chgOpts, D.maxChanges, (v) => { D.maxChanges = +v; runDest(); })),
         field('Durée max', sel([[0, 'Toutes'], [120, '2 h'], [180, '3 h'], [240, '4 h'], [360, '6 h'], [480, '8 h']], D.maxDur, (v) => { D.maxDur = +v; rerender(); }))),
+      D.mode === 'rtn' && h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Départ la veille (après-midi/soir) en train de nuit, journée complète sur place, retour le lendemain vers midi.'),
+      D.mode !== 'one' && D.mode !== 'rtn' && h('div', { class: 'row wrap', style: 'margin-top:8px' }, field('Temps min. sur place', sel(STAY, D.minStay, (v) => { D.minStay = +v; runDest(); }))),
       h('div', { class: 'row', style: 'margin-top:10px' }, h('span', { class: 'small grow' }, 'Inclure les trains de nuit'), h('input', { type: 'checkbox', class: 'switch', checked: D.night, onchange: (e) => { D.night = e.target.checked; runDest(); } }))),
     h('div', { class: 'row', style: 'margin:6px 0' }, h('div', { class: 'seg grow' }, [['list', 'Liste'], ['map', 'Carte']].map(([k, l]) => h('button', { class: D.view === k ? 'on' : '', onclick: () => { D.view = k; rerender(); } }, l)))),
     destResults());
   if (!D.res && !D.loading && !D.err) setTimeout(runDest, 0);
   return el;
 }
+const STAY = [[60, '1 h'], [120, '2 h'], [180, '3 h'], [240, '4 h'], [360, '6 h'], [480, '8 h']];
+// Paramètres des modes aller-retour (nuit + journée : départ la veille en train de nuit, retour le lendemain midi)
+const rtOpts = (mode, minStay) => (mode === 'rtn' ? { nights: 2, nightOut: true, depFrom: 720, backFrom: 660, backTo: 870, allowNight: true, minStay: 240 }
+  : { nights: { rt: 0, rt1: 1, rt2: 2 }[mode], minStay });
 async function runDest() {
   const tok = ++D.tok; D.loading = true; D.err = null; rerender();
   try {
     const base = { from: D.from, date: D.date, cfg: S.settings, depFrom: effFrom(D.date, D.depFrom), depTo: D.depTo, allowNight: D.night };
     const r = D.mode === 'one' ? await rpc('destinations', { ...base, maxChanges: D.maxChanges, maxDur: D.maxDur || undefined })
-      : await rpc('roundTrips', { ...base, maxChanges: Math.min(D.maxChanges, 2), nights: { rt: 0, rt1: 1, rt2: 2 }[D.mode], minStay: S.settings.minStay });
+      : await rpc('roundTrips', { ...base, ...rtOpts(D.mode, D.minStay), maxChanges: Math.min(D.maxChanges, 2) });
     if (tok !== D.tok) return; D.res = r;
   } catch (e) { if (tok !== D.tok) return; D.err = e.message; }
   D.loading = false; rerender();
@@ -128,7 +135,13 @@ function destResults() {
   if (!res.length) return h('div', { class: 'empty' }, D.mode === 'one' ? 'Aucune place MAX à cette date avec ces critères.' : 'Aucun aller-retour avec places MAX sur tous les tronçons. Essaie une autre date, plus de correspondances ou un temps sur place plus court (Plus → Réglages).');
   const info = h('div', { class: 'small muted', style: 'margin:2px 2px 6px' }, `${res.length} destination${res.length > 1 ? 's' : ''} · ${fmtDay(D.date)}`);
   if (D.view === 'map') return [info, mapView(res)];
-  return [info, ...res.map((r) => (D.mode === 'one' ? destRow(r) : rtRow(r))), sourceNote()];
+  if (D.mode !== 'one') return [info, ...res.map(rtRow), sourceNote()];
+  const main = res.filter((r) => !r.viaAlt), alt = res.filter((r) => r.viaAlt);
+  const altName = alt.length ? name(R.meta.stations[alt[0].fastest.legs[0].o]) : '';
+  return [info, main.length && h('h2', {}, `Depuis ${name(D.from)} · ${main.length}`), ...main.map(destRow),
+    alt.length && h('h2', {}, `Pas de place depuis ${name(D.from)} — au départ d’une gare proche · ${alt.length}`),
+    alt.length && h('div', { class: 'tiny muted', style: 'margin:0 2px 6px' }, `Ces destinations n’ont aucun train MAX au départ de ${name(D.from)} ce jour-là, mais en ont depuis ${altName} ou une autre gare accessible en TER direct (trajet jusqu’à la gare indiqué sur chaque fiche).`),
+    ...alt.map(destRow), sourceNote()];
 }
 function destRow(r) {
   const f = r.fastest;
@@ -208,6 +221,9 @@ function viewTrip() {
     h('div', { class: 'row' }, h('div', { class: 'grow' }, picker('Départ', name(T.from), () => pickFrom(T.from, (s) => { T.from = s; runTrip(); }))),
       h('button', { class: 'btn', onclick: () => { [T.from, T.to] = [T.to, T.from]; runTrip(); }, 'aria-label': 'Inverser' }, icon('swap')),
       h('div', { class: 'grow' }, picker('Arrivée', name(T.to), () => pickAny(T.to, (s) => { T.to = s; runTrip(); }, 'Gare d’arrivée')))),
+    h('div', { class: 'seg', style: 'margin-top:8px' }, [['one', 'Aller simple'], ['rt', 'A/R journée'], ['rt1', 'A/R 1 nuit'], ['rtn', 'Nuit + journée']].map(([k, l]) => h('button', { class: (T.rt || 'one') === k ? 'on' : '', onclick: () => { T.rt = k; runTrip(); } }, l))),
+    (T.rt || 'one') !== 'one' && T.rt !== 'rtn' && h('div', { class: 'row', style: 'margin-top:6px' }, field('Temps min. sur place', sel(STAY, T.minStay ?? S.settings.minStay, (v) => { T.minStay = +v; runTrip(); }))),
+    T.rt === 'rtn' && h('div', { class: 'small muted', style: 'margin:6px 2px' }, 'Départ la veille (après-midi/soir) en train de nuit, journée complète sur place, retour le lendemain vers midi. La date choisie est celle du départ.'),
     dateStrip(R.meta.dates, T.date, (d) => { T.date = d; runTrip(); }),
     h('div', { class: 'card flat' },
       h('div', { class: 'seg' }, [['depart', 'Je pars entre'], ['arrive', 'Je veux arriver entre']].map(([k, l]) => h('button', { class: T.tmode === k ? 'on' : '', onclick: () => { T.tmode = k; if (k === 'arrive' && T.t2 < 300) T.t2 = 780; runTrip(); } }, l))),
@@ -225,6 +241,10 @@ async function runTrip() {
     const arrive = T.tmode === 'arrive';
     const a = { from: T.from, to: T.to, date: T.date, cfg: S.settings, maxChanges: T.maxChanges, nearby: S.settings.nearby };
     if (arrive) { a.arrFrom = T.a1 ?? Math.max(0, T.t2 - 180); a.arrTo = T.t2; a.depFrom = S.settings.earliest; a.depTo = 1439; } else { a.depFrom = effFrom(T.date, T.t1); a.depTo = T.t2; }
+    if (T.rt && T.rt !== 'one') {
+      const rr = await rpc('roundTrips', { from: T.from, to: T.to, date: T.date, cfg: S.settings, maxChanges: Math.min(T.maxChanges, 2), depFrom: a.depFrom, depTo: arrive ? 1439 : T.t2, ...rtOpts(T.rt, T.minStay ?? S.settings.minStay) });
+      if (tok !== T.tok) return; T.rtres = rr; T.res = []; T.next = null; T.loading = false; rerender(); return;
+    }
     const r = await rpc('journeys', a); if (tok !== T.tok) return; T.res = r; T.next = null;
     if (!r.some((j) => j.delta === 0)) { rpc('nextDates', { ...a, depFrom: arrive ? S.settings.earliest : T.t1, nearby: 0 }).then((n) => { if (tok === T.tok) { T.next = n; rerender(); } }).catch(() => {}); }
   } catch (e) { if (tok !== T.tok) return; T.err = e.message; }
@@ -233,6 +253,14 @@ async function runTrip() {
 function tripResults() {
   if (T.loading) return h('div', { class: 'empty' }, h('span', { class: 'spin' }), ' Recherche en cours…');
   if (T.err) return h('div', { class: 'card' }, T.err);
+  if (T.rt && T.rt !== 'one') {
+    const plans = T.rtres || [];
+    if (!plans.length) return h('div', { class: 'empty' }, 'Aucun aller-retour avec places MAX sur tous les tronçons. Essaie une autre date, un temps sur place plus court ou plus de correspondances.');
+    const its = plans.flatMap((p) => p.items).sort((x, y) => y.stay - x.stay);
+    return [h('div', { class: 'small muted', style: 'margin:2px 2px 6px' }, `${name(T.from)} ⇄ ${name(T.to)} · ${fmtDay(T.date)} · ${its.length} option${its.length > 1 ? 's' : ''}`),
+      ...its.slice(0, 12).map((it) => h('div', { class: 'card flat' }, h('div', { class: 'row wrap' }, chip(`${fmtDur(it.stay)} sur place`, 'ok'), chip(`${fmtDur(it.travel)} de train`, 'gray'), (it.out.night || it.back.night) && chip('Nuit', 'night')),
+        journeyCard(it.out, R.meta, { title: 'Aller' }), journeyCard(it.back, R.meta, { title: 'Retour' }))), sourceNote()];
+  }
   const js = T.res || [];
   const cmp = { time: (a, b) => a.s - b.s, dur: (a, b) => a.dur - b.dur || a.s - b.s, chg: (a, b) => a.changes - b.changes || a.s - b.s }[T.sort];
   const isAlt = (j) => j.altFrom || j.altTo;

@@ -245,12 +245,19 @@ function roundTripsFrom(net, o, fromName) {
   const common = { minConn: cfg.minConn, maxWait: cfg.maxWait, earliest: cfg.earliest, allowNight: o.allowNight ?? cfg.allowNight, maxChanges: o.maxChanges ?? 1 };
   const outs = search(net, { ...common, origins: homeIds, di: o.di, depFrom: o.depFrom ?? cfg.earliest, depTo: o.depTo ?? cfg.latest, sameDay: nights === 0, maxDur: 30 * 60 });
   const byX = new Map();
-  for (const j of outs) { const x = j.legs[j.legs.length - 1].d; if (!homeSet.has(x)) (byX.get(x) || byX.set(x, []).get(x)).push(j); }
+  const onlyCl = o.to ? net.cl[net.id(o.to)] : null;
+  for (const j of outs) {
+    const x = j.legs[j.legs.length - 1].d;
+    if (onlyCl != null && net.cl[x] !== onlyCl) continue;
+    // « nuit + journée » : on part l'après-midi/soir, on arrive le lendemain matin (train de nuit), journée complète sur place
+    if (o.nightOut && !(j.e >= base + DAY && j.e <= base + DAY + 13 * 60)) continue;
+    if (!homeSet.has(x)) (byX.get(x) || byX.set(x, []).get(x)).push(j);
+  }
   const plans = [];
   if (back >= net.dates.length) return plans;
   for (const [x, list] of byX) {
     const eMin = Math.min(...list.map((j) => j.e));
-    const rets = search(net, { ...common, origins: [x], dests: homeSet, di: back, depFrom: Math.max(cfg.earliest, eMin + minStay - back * DAY), depTo: o.backTo ?? DAY - 1, sameDay: nights === 0, maxDur: 30 * 60 });
+    const rets = search(net, { ...common, origins: [x], dests: homeSet, di: back, depFrom: Math.max(cfg.earliest, o.backFrom ?? 0, eMin + minStay - back * DAY), depTo: o.backTo ?? DAY - 1, sameDay: nights === 0, maxDur: 30 * 60 });
     const combos = [];
     for (const r of rets) {
       let bestOut = null;

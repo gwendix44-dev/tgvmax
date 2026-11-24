@@ -1,5 +1,5 @@
 // Briques d'interface : création de nœuds, feuilles, sélecteur de gare, carte de trajet.
-import { pretty, norm, fmtTime, fmtDur, PARIS_LABEL, parisTransfer } from './stations.js';
+import { pretty, norm, fmtTime, fmtDur, PARIS_LABEL, parisTransfer, LINKS } from './stations.js';
 
 const DAY = 1440;
 export function h(tag, props, ...kids) {
@@ -102,7 +102,8 @@ export function journeyCard(j, meta, { dim = false, actions = [], title = '' } =
       if (same) body.push(h('div', { class: 'conn stay' }, `Même train — reste à bord à ${pretty(nm(l.o))} (2 réservations MAX)`));
       else {
         const sc = p.ptD && l.ptO && p.ptD !== l.ptO;
-        body.push(h('div', { class: 'conn' }, sc ? `Correspondance ${fmtDur(gap)} · changement de gare : ${PARIS_LABEL[p.ptD]} → ${PARIS_LABEL[l.ptO]} (≈ ${parisTransfer(p.ptD, l.ptO)} min de trajet)` : `Correspondance ${fmtDur(gap)} à ${pretty(nm(l.o))}`));
+        const lk = p.d !== l.o && LINKS.find(([a, b]) => (nm(p.d) === a && nm(l.o) === b) || (nm(p.d) === b && nm(l.o) === a));
+        body.push(h('div', { class: 'conn' }, lk ? `Correspondance ${fmtDur(gap)} · changement de gare : ${pretty(nm(p.d))} → ${pretty(nm(l.o))} (≈ ${lk[2]} min en ${lk[3]}, hors MAX)` : sc ? `Correspondance ${fmtDur(gap)} · changement de gare : ${PARIS_LABEL[p.ptD]} → ${PARIS_LABEL[l.ptO]} (≈ ${parisTransfer(p.ptD, l.ptO)} min de trajet)` : `Correspondance ${fmtDur(gap)} à ${pretty(nm(l.o))}`));
       }
     }
     const sameAsPrev = p && p.ti === l.ti && p.di === l.di;

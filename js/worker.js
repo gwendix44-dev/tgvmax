@@ -1,5 +1,5 @@
 // Calculs lourds hors du fil principal : chargement du snapshot, recherches, alertes, chat.
-import { Network, destinations, journeys, roundTrips, evalAlert, alertStatus, DAY } from './engine.js';
+import { Network, destinations, journeys, nextDates, roundTrips, evalAlert, alertStatus, DAY } from './engine.js';
 import { answer } from './chat.js';
 
 let net = null;
@@ -12,6 +12,7 @@ const ops = {
   },
   destinations: (a) => destinations(net, { ...a, di: net.dayIndex(a.date) }),
   journeys: (a) => journeys(net, { ...a, di: net.dayIndex(a.date) }),
+  nextDates: (a) => nextDates(net, { ...a, di: net.dayIndex(a.date) }),
   roundTrips: (a) => roundTrips(net, { ...a, di: net.dayIndex(a.date) }),
   alerts({ alerts, cfg }) {
     return alerts.map((al) => {

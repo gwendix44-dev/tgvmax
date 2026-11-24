@@ -148,3 +148,12 @@ export function parisTransfer(a, b) {
 
 export const fmtTime = (m) => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m / 60)).padStart(2, '0') + 'h' + String(m % 60).padStart(2, '0'); };
 export const fmtDur = (m) => { const h = Math.floor(m / 60), r = m % 60; return h ? `${h}h${String(r).padStart(2, '0')}` : `${r} min`; };
+
+// Gares d'une même ville : atteindre l'une ou l'autre revient au même (jamais d'aller-retour entre elles).
+export const CLUSTERS = [
+  ['NIMES CENTRE', 'NIMES PONT DU GARD'], ['LYON (intramuros)', 'LYON ST EXUPERY TGV.'], ['MONTPELLIER SAINT ROCH', 'MONTPELLIER SUD DE FRANCE'],
+  ['AVIGNON CENTRE', 'AVIGNON TGV'], ['VALENCE VILLE', 'VALENCE TGV AUVERGNE RHONE ALPES'], ['MACON VILLE', 'MACON LOCHE TGV'],
+  ['BESANCON VIOTTE', 'BESANCON FRANCHE COMTE TGV'], ['MARSEILLE ST CHARLES', 'MARSEILLE BLANCARDE'], ['PARIS (intramuros)', 'PARIS MONTPARNASSE VAUGIRARD'],
+];
+// Changements de gare possibles en correspondance (minutes de trajet hors MAX).
+export const LINKS = [['MASSY TGV', 'MASSY PALAISEAU', 25, 'RER B/C']];

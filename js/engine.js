@@ -1,7 +1,7 @@
 // Moteur TGV MAX : lecture du snapshot, recherche de trajets (correspondances partout en France),
 // allers-retours, trains de nuit, gares alternatives et alertes. Pur JS, sans DOM : tourne dans le
 // navigateur (Web Worker) comme dans Node (tâche planifiée).
-import { COORDS, altStations, parisTerminal, parisTransfer, PARIS, fmtTime, pretty } from './stations.js';
+import { COORDS, altStations, parisTerminal, parisTransfer, PARIS, CLUSTERS, LINKS, fmtTime, pretty } from './stations.js';
 
 export const DAY = 1440;
 
@@ -20,6 +20,14 @@ export class Network {
     this.rowSet = new Set();
     this.parisIds = new Set([...PARIS].filter((p) => this.sid.has(p)).map((p) => this.sid.get(p)));
     this.hub = snap.stations.map((_, i) => (this.parisIds.has(i) ? [...this.parisIds] : [i]));
+    this.cl = snap.stations.map((_, i) => i); // identifiant de ville (gares équivalentes)
+    for (const c of CLUSTERS) { const ids = c.map((x) => this.sid.get(x)).filter((x) => x !== undefined); for (const i of ids) this.cl[i] = ids[0]; }
+    this.link = new Map();
+    for (const [a, b, min, how] of LINKS) {
+      const x = this.sid.get(a), y = this.sid.get(b); if (x === undefined || y === undefined) continue;
+      this.link.set(x * 512 + y, { min, how }); this.link.set(y * 512 + x, { min, how });
+      this.hub[x] = [x, y]; this.hub[y] = [y, x];
+    }
     for (let i = 0; i < n; i++) {
       const b = i * 6, di = r[b], ti = r[b + 1], o = r[b + 2], d = r[b + 3], dep = r[b + 4], arr = r[b + 5];
       const [no, ai] = snap.trains[ti]; const ax = snap.axes[ai];
@@ -42,9 +50,11 @@ export class Network {
 
 const lowerBound = (arr, s) => { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m].s < s) lo = m + 1; else hi = m; } return lo; };
 
-function reqConn(last, next, minConn) {
+function reqConn(net, last, next, minConn) {
   if (last.ti === next.ti && last.d === next.o && last.di === next.di) return 0; // même train : on reste à bord
   let r = minConn;
+  const lk = last.d !== next.o && net.link.get(last.d * 512 + next.o);
+  if (lk) r = Math.max(r, lk.min + 30);
   if (last.ptD && next.ptO && last.ptD !== next.ptO) r = Math.max(r, parisTransfer(last.ptD, next.ptO) + 30);
   return r;
 }
@@ -78,7 +88,8 @@ export function search(net, o) {
     const consider = (k, prefix, leg) => {
       if (opt.sameDay && leg.e >= base + DAY) return;
       if (leg.e - start.s > opt.maxDur) return;
-      if (prefix.some((l) => l.o === leg.d)) return;
+      if (prefix.length && opt.origins.includes(leg.d)) return; // ne repasse pas par une gare de départ (ex. Angers → Nantes)
+      if (prefix.some((l) => net.cl[l.o] === net.cl[leg.d])) return; // pas de détour pour revenir dans une ville déjà visitée
       if (prefix.length) {
         let j = prefix.length - 1;
         while (j > 0 && prefix[j].ti === leg.ti && prefix[j].di === leg.di && prefix[j - 1].ti === leg.ti) j--;
@@ -110,7 +121,7 @@ export function search(net, o) {
             if (!okLeg(L)) continue;
             const stay = L.ti === last.ti && L.di === last.di && L.o === last.d;
             if (!stay && ch + 1 > opt.maxChanges) continue;
-            if (L.s < last.e + reqConn(last, L, opt.minConn)) continue;
+            if (L.s < last.e + reqConn(net, last, L, opt.minConn)) continue;
             consider(k, path, L);
           }
         }
@@ -150,18 +161,23 @@ export function destinations(net, o) {
   for (const j of js) {
     if (o.maxDur && j.dur > o.maxDur) continue;
     const d = j.legs[j.legs.length - 1].d;
-    if (ids.includes(d)) continue;
+    if (ids.includes(d) || ids.some((i) => net.cl[i] === net.cl[d])) continue;
     j.altFrom = oAcc.get(j.legs[0].o) || null;
-    (by.get(d) || by.set(d, []).get(d)).push(j);
+    const key = net.cl[d];
+    (by.get(key) || by.set(key, []).get(key)).push(j);
   }
   const res = [];
-  for (const [d, all] of by) {
+  for (const [, all] of by) {
+    // une ville à plusieurs gares (Nîmes Centre / Pont du Gard…) = une seule destination ; on nomme la gare la plus fréquente
+    const cnt = new Map(); for (const j of all) { const x = j.legs.at(-1).d; cnt.set(x, (cnt.get(x) || 0) + 1); }
+    const d = [...cnt.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    const others = [...cnt.keys()].filter((x) => x !== d).map((x) => net.name(x));
     const mainOnly = all.filter((j) => !j.altFrom);
     const list = mainOnly.length ? mainOnly : all;
     const viaAlt = !mainOnly.length;
     list.sort((a, b) => a.s - b.s);
     const fastest = list.reduce((m, j) => (j.dur < m.dur ? j : m), list[0]);
-    res.push({ d, name: net.name(d), viaAlt, n: list.length, fastest, direct: list.filter((j) => j.changes === 0).length, journeys: list });
+    res.push({ d, name: net.name(d), others, viaAlt, n: list.length, fastest, direct: list.filter((j) => j.changes === 0).length, journeys: list });
   }
   return res.sort((a, b) => a.fastest.dur - b.fastest.dur);
 }
@@ -289,3 +305,14 @@ export function describe(net, j) {
 }
 export const fullDate = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 export { COORDS };
+
+// ---------- Prochaines dates avec une place (quand rien n'existe à la date demandée) ----------
+export function nextDates(net, o, max = 4) {
+  const out = [];
+  for (let di = o.di + 1; di < net.dates.length && out.length < max; di++) {
+    const js = journeys(net, { ...o, di, nearby: 0 });
+    const ok = js.filter((j) => j.delta === 0);
+    if (ok.length) out.push({ date: net.dates[di], n: ok.length, first: ok.reduce((m, j) => (j.s < m.s ? j : m), ok[0]) });
+  }
+  return out;
+}

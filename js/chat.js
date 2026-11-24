@@ -1,8 +1,8 @@
 // Assistant de discussion : comprend une demande en français (dates, nombre de destinations, aller-retour,
 // trains de nuit…) et l'exécute sur les vraies données de disponibilité, avec les mêmes règles que l'appli
 // (correspondances ≥ réglage, gares alternatives, trains de nuit). Il n'invente ni train ni place.
-import { destinations, journeys, roundTrips, cfgOf, DAY, fullDate } from './engine.js';
-import { pretty, norm, km, fmtDur } from './stations.js';
+import { destinations, journeys, nextDates, roundTrips, cfgOf, DAY, fullDate } from './engine.js';
+import { pretty, norm, km, fmtDur, fmtTime } from './stations.js';
 
 const MONTHS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
 const WD = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
@@ -129,7 +129,11 @@ export function answer(net, text, cfgIn, ctx = {}) {
     let js = filterNight(journeys(net, { cfg, from, to, di: net.dayIndex(date), depFrom: cfg.earliest, depTo: cfg.latest, nearby: 0, maxChanges: opts.maxChanges }));
     js.sort((a, b) => (a.altFrom || a.altTo ? 1 : 0) - (b.altFrom || b.altTo ? 1 : 0) || a.s - b.s);
     js = js.slice(0, count > 3 ? count : 4);
-    if (!js.length) return { text: `Aucune place MAX ${fromP} → ${pretty(to)} le ${dLabel} (même avec correspondances et gares proches). Je peux créer une alerte pour être prévenu dès qu'une place s'ouvre.`, cards: [], draft: { from, to, mode: 'date', date, timeMode: 'depart', from1: 240, from2: 1439, maxChanges: 1, alts: true } };
+    if (!js.length) {
+      const nx = nextDates(net, { cfg, from, to, di: net.dayIndex(date), depFrom: cfg.earliest, depTo: cfg.latest, maxChanges: opts.maxChanges }, 4);
+      const nt = nx.length ? ` Prochaines dates avec des places : ${nx.map((n) => `${fullDate(n.date)} (dès ${fmtTime(n.first.s)})`).join(', ')}.` : ' Rien non plus sur les jours déjà ouverts.';
+      return { text: `Aucune place MAX ${fromP} → ${pretty(to)} le ${dLabel} (même avec correspondances et gares proches).${nt} Je peux créer une alerte pour être prévenu dès qu'une place s'ouvre.`, cards: [], draft: { from, to, mode: 'date', date, timeMode: 'depart', from1: 240, from2: 1439, maxChanges: 1, alts: true } };
+    }
     return { text: `${fromP} → ${pretty(to)}, ${dLabel} : ${js.length} option${js.length > 1 ? 's' : ''} avec places MAX sur chaque tronçon.`, cards: js.map((j) => ({ title: `${fmtDur(j.dur)} · ${j.changes ? j.changes + ' corr.' : 'direct'}`, journeys: [j], draft: draftOf(from, to, date, j) })), last: draftOf(from, to, date, js[0]) };
   }
 

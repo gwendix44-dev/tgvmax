@@ -92,3 +92,14 @@ test('chiffrement des alertes (aller-retour)', async () => {
   assert.deepEqual(await decryptJSON(p, 'secret'), { a: 1, b: 'é' });
   await assert.rejects(decryptJSON(p, 'autre'));
 });
+
+test('Le Havre / Rouen via Massy TGV → Massy Palaiseau, pas de détour Pont du Gard, prochaines dates', async () => {
+  const { journeys, nextDates, cfgOf } = await import('../js/engine.js');
+  const cfg = cfgOf({});
+  const di = net.dayIndex('2026-11-26');
+  const lh = journeys(net, { cfg, from: 'NANTES', to: 'LE HAVRE', di, depFrom: 240, depTo: 1439, nearby: 0, maxChanges: 2 });
+  assert.ok(lh.some((j) => j.legs.some((l) => net.name(l.d) === 'MASSY TGV') && j.legs.some((l) => net.name(l.o) === 'MASSY PALAISEAU')));
+  const nm = journeys(net, { cfg, from: 'NANTES', to: 'NIMES CENTRE', di, depFrom: 240, depTo: 1439, nearby: 0, maxChanges: 2 });
+  for (const j of nm) assert.ok(!j.legs.slice(0, -1).some((l) => /NIMES/.test(net.name(l.o))), 'pas de détour par Nîmes');
+  assert.ok(nextDates(net, { cfg, from: 'LILLE (intramuros)', to: 'BORDEAUX ST JEAN', di: 0, depFrom: 240, depTo: 1439 }).length > 0);
+});

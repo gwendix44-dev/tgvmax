@@ -1,5 +1,5 @@
 // Service worker : appli hors-ligne + notifications push.
-const CACHE = 'tgvmax-v1';
+const CACHE = 'tgvmax-v2';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/engine.js', 'js/stations.js', 'js/chat.js', 'js/worker.js', 'js/crypto.js', 'js/ui.js', 'js/sync.js', 'js/config.js',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon.svg'];
 

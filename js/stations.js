@@ -158,7 +158,7 @@ export const CLUSTERS = [
 ];
 // Changements de gare au sein d'un pôle : [gare A, gare B, minutes de trajet hors MAX, moyen] (estimations).
 const IDF_T = { 'PARIS (intramuros)': { 'MASSY TGV': 40, 'MASSY PALAISEAU': 35, 'MARNE LA VALLEE CHESSY': 40, 'AEROPORT ROISSY CDG 2 TGV': 50, 'VERSAILLES CHANTIERS': 30, 'PARIS MONTPARNASSE VAUGIRARD': 10 },
-  'MASSY TGV': { 'MASSY PALAISEAU': 25, 'MARNE LA VALLEE CHESSY': 65, 'AEROPORT ROISSY CDG 2 TGV': 55, 'VERSAILLES CHANTIERS': 40 },
+  'MASSY TGV': { 'MASSY PALAISEAU': 8, 'MARNE LA VALLEE CHESSY': 65, 'AEROPORT ROISSY CDG 2 TGV': 55, 'VERSAILLES CHANTIERS': 40 },
   'MASSY PALAISEAU': { 'MARNE LA VALLEE CHESSY': 65, 'AEROPORT ROISSY CDG 2 TGV': 55, 'VERSAILLES CHANTIERS': 30 },
   'MARNE LA VALLEE CHESSY': { 'AEROPORT ROISSY CDG 2 TGV': 35, 'VERSAILLES CHANTIERS': 75 }, 'AEROPORT ROISSY CDG 2 TGV': { 'VERSAILLES CHANTIERS': 80 },
   'PARIS MONTPARNASSE VAUGIRARD': { 'MASSY TGV': 30, 'MASSY PALAISEAU': 30, 'VERSAILLES CHANTIERS': 20 } };
@@ -166,7 +166,7 @@ const CITY_T = [['NIMES CENTRE', 'NIMES PONT DU GARD', 30, 'bus'], ['LYON (intra
   ['AVIGNON CENTRE', 'AVIGNON TGV', 15, 'navette'], ['VALENCE VILLE', 'VALENCE TGV AUVERGNE RHONE ALPES', 20, 'bus'], ['MACON VILLE', 'MACON LOCHE TGV', 20, 'bus'],
   ['BESANCON VIOTTE', 'BESANCON FRANCHE COMTE TGV', 25, 'bus/TER'], ['MARSEILLE ST CHARLES', 'MARSEILLE BLANCARDE', 10, 'métro'], ['TOURS', 'ST PIERRE DES CORPS', 10, 'TER']];
 export const LINKS = [...CITY_T];
-for (const [a, row] of Object.entries(IDF_T)) for (const [b, m] of Object.entries(row)) LINKS.push([a, b, m, m <= 10 ? 'métro' : 'RER / train']);
+for (const [a, row] of Object.entries(IDF_T)) for (const [b, m] of Object.entries(row)) LINKS.push([a, b, m, m <= 8 ? 'à pied, 300 m' : m <= 10 ? 'métro' : 'RER / train']);
 
 // TER directs (gares de secours au départ) : [gare A, gare B, durée en minutes (estimation)]. Sens identique dans les deux directions.
 export const TER = [

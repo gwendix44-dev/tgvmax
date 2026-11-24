@@ -26,7 +26,7 @@ export class Network {
     for (const c of CLUSTERS) {
       const ids = c.map((x) => this.sid.get(x)).filter((x) => x !== undefined);
       for (const i of ids) this.hub[i] = [i, ...ids.filter((x) => x !== i)];
-      for (const x of ids) for (const y of ids) if (x !== y) this.link.set(x * 512 + y, { min: 40, how: 'transport local' });
+      for (const x of ids) for (const y of ids) if (x !== y) { const d = km(this.stations[x], this.stations[y]); const e = d < 1 ? { min: Math.max(5, Math.ceil(d * 15)), how: 'à pied' } : { min: Math.round(15 + d * 0.7), how: 'transport local' }; this.link.set(x * 512 + y, e); }
     }
     for (const [a, b, min, how] of LINKS) {
       const x = this.sid.get(a), y = this.sid.get(b); if (x === undefined || y === undefined) continue;
@@ -58,7 +58,7 @@ function reqConn(net, last, next, minConn) {
   if (last.ti === next.ti && last.d === next.o && last.di === next.di) return 0; // même train : on reste à bord
   let r = minConn;
   const lk = last.d !== next.o && net.link.get(last.d * 512 + next.o);
-  if (lk) r = Math.max(r, lk.min + 30);
+  if (lk) r = lk.min <= 10 ? lk.min + 15 : Math.max(r, lk.min + 30); // gares voisines (à pied) : marge courte ; sinon temps de trajet + 30 min
   if (last.ptD && next.ptO && last.ptD !== next.ptO) r = Math.max(r, parisTransfer(last.ptD, next.ptO) + 30);
   return r;
 }

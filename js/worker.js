@@ -13,6 +13,15 @@ const ops = {
   destinations: (a) => destinations(net, { ...a, di: net.dayIndex(a.date) }),
   journeys: (a) => journeys(net, { ...a, di: net.dayIndex(a.date) }),
   nextDates: (a) => nextDates(net, { ...a, di: net.dayIndex(a.date) }),
+  nextRt(a) {
+    const out = [], di0 = net.dayIndex(a.date);
+    for (let di = di0 + 1; di < net.dates.length && out.length < 4; di++) {
+      const plans = roundTrips(net, { ...a, di }).filter((p) => !a.only || p.items.some((i) => !i.altFrom));
+      const items = plans.flatMap((p) => p.items).filter((i) => !a.only || !i.altFrom);
+      if (items.length) out.push({ date: net.dates[di], n: items.length, first: items[0].out });
+    }
+    return out;
+  },
   roundTrips: (a) => roundTrips(net, { ...a, di: net.dayIndex(a.date) }),
   alerts({ alerts, cfg }) {
     return alerts.map((al) => {

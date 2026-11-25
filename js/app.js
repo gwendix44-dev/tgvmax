@@ -254,7 +254,9 @@ async function runTrip() {
     if (arrive) { a.arrFrom = T.a1 ?? Math.max(0, T.t2 - 180); a.arrTo = T.t2; a.depFrom = S.settings.earliest; a.depTo = 1439; } else { a.depFrom = effFrom(T.date, T.t1); a.depTo = T.t2; }
     if (T.rt && T.rt !== 'one') {
       const rr = await rpc('roundTrips', { from: T.from, to: T.to, date: T.date, cfg: S.settings, maxChanges: Math.min(T.maxChanges, 2), depFrom: a.depFrom, depTo: arrive ? 1439 : T.t2, ...rtOpts(T.rt, T.minStay ?? S.settings.minStay) });
-      if (tok !== T.tok) return; T.rtres = rr; T.res = []; T.next = null; T.loading = false; rerender(); return;
+      if (tok !== T.tok) return; T.rtres = rr; T.res = []; T.next = null; T.loading = false; rerender();
+      if (!rr.some((p) => p.items.some((i) => !T.only || !i.altFrom))) { const o = { from: T.from, to: T.to, date: T.date, cfg: S.settings, maxChanges: Math.min(T.maxChanges, 2), depFrom: S.settings.earliest, depTo: 1439, only: T.only, ...rtOpts(T.rt, T.minStay ?? S.settings.minStay) }; rpc('nextRt', o).then((n) => { if (tok === T.tok) { T.next = n; rerender(); } }).catch(() => {}); }
+      return;
     }
     const r = await rpc('journeys', a); if (tok !== T.tok) return; T.res = r; T.next = null;
     if (!r.some((j) => j.delta === 0)) { rpc('nextDates', { ...a, depFrom: arrive ? S.settings.earliest : T.t1, nearby: 0 }).then((n) => { if (tok === T.tok) { T.next = n; rerender(); } }).catch(() => {}); }
@@ -262,14 +264,17 @@ async function runTrip() {
   T.loading = false; rerender();
 }
 function tripResults() {
+  const nextBox = () => (T.next === null ? h('div', { class: 'small muted', style: 'margin:6px 0' }, h('span', { class: 'spin' }), ' Recherche des prochaines dates…')
+    : h('div', { class: 'card flat' }, h('div', { class: 'small', style: 'margin-bottom:6px' }, T.next && T.next.length ? 'Prochaines dates avec des places MAX :' : 'Aucune place MAX sur les jours déjà ouverts à la réservation.'),
+      ...(T.next || []).map((n) => h('button', { class: 'item', onclick: () => { T.date = n.date; runTrip(); } }, h('div', { class: 't' }, fmtDay(n.date)), h('div', { class: 's' }, `${n.n} trajet${n.n > 1 ? 's' : ''} · dès ${fmtTime(n.first.s)} → ${fmtTime(n.first.e)}`)))));
   const seeLink = (n) => h('div', { class: 'banner' }, h('span', {}, `${n} trajet${n > 1 ? 's' : ''} disponible${n > 1 ? 's' : ''} depuis ou vers d’autres gares. `), h('a', { href: '#', onclick: (e) => { e.preventDefault(); T.showAlt = true; rerender(); } }, 'Voir'));
   if (T.loading) return h('div', { class: 'empty' }, h('span', { class: 'spin' }), ' Recherche en cours…');
   if (T.err) return h('div', { class: 'card' }, T.err);
   if (T.rt && T.rt !== 'one') {
     const plans = T.rtres || [];
-    if (!plans.length || (T.only && !T.showAlt && !plans.some((p) => p.items.some((i) => !i.altFrom)) && !plans.length)) return h('div', { class: 'empty' }, 'Aucun aller-retour avec places MAX sur tous les tronçons. Essaie une autre date, un temps sur place plus court ou plus de correspondances.');
     const all = plans.flatMap((p) => p.items).sort((x, y) => y.stay - x.stay);
     const its = T.only && !T.showAlt ? all.filter((i) => !i.altFrom) : all, hid = all.length - its.length;
+    if (!its.length) return [h('div', { class: 'empty' }, 'Aucun aller-retour avec places MAX sur tous les tronçons à cette date.'), hid > 0 && seeLink(hid), nextBox()];
     return [h('div', { class: 'small muted', style: 'margin:2px 2px 6px' }, `${name(T.from)} ⇄ ${name(T.to)} · ${fmtDay(T.date)} · ${its.length} option${its.length > 1 ? 's' : ''}`),
       ...its.slice(0, 12).map((it) => h('div', { class: 'card flat' }, h('div', { class: 'row wrap' }, chip(`${fmtDur(it.stay)} sur place`, 'ok'), chip(`${fmtDur(it.travel)} de train`, 'gray'), (it.out.night || it.back.night) && chip('Nuit', 'night')),
         journeyCard(it.out, R.meta, { title: 'Aller' }), journeyCard(it.back, R.meta, { title: 'Retour' }))), hid > 0 && seeLink(hid), sourceNote()];
@@ -283,9 +288,6 @@ function tripResults() {
   const draft = { from: T.from, to: T.to, mode: 'date', date: T.date, timeMode: T.tmode, from1: T.t1, from2: T.t2, to1: T.a1 ?? Math.max(0, T.t2 - 180), to2: T.t2, maxChanges: T.maxChanges, alts: true };
   const out = [];
   out.push(h('div', { class: 'row', style: 'margin:2px 0 4px' }, h('span', { class: 'small muted grow' }, `${name(T.from)} → ${name(T.to)} · ${fmtDay(T.date)}`), alertBtn(draft)));
-  const nextBox = () => (T.next === null ? h('div', { class: 'small muted', style: 'margin:6px 0' }, h('span', { class: 'spin' }), ' Recherche des prochaines dates…')
-    : h('div', { class: 'card flat' }, h('div', { class: 'small', style: 'margin-bottom:6px' }, T.next && T.next.length ? 'Prochaines dates avec des places MAX :' : 'Aucune place MAX sur les jours déjà ouverts à la réservation.'),
-      ...(T.next || []).map((n) => h('button', { class: 'item', onclick: () => { T.date = n.date; runTrip(); } }, h('div', { class: 't' }, fmtDay(n.date)), h('div', { class: 's' }, `${n.n} trajet${n.n > 1 ? 's' : ''} · dès ${fmtTime(n.first.s)} → ${fmtTime(n.first.e)}`)))));
   if (!js.length && hiddenN) { out.push(h('div', { class: 'empty' }, `Aucune place MAX au départ de ${name(T.from)} sur ce créneau.`), seeLink(hiddenN), nextBox()); return out; }
   if (!js.length) { out.push(h('div', { class: 'empty' }, 'Aucune place MAX, même avec correspondances, gares proches et ±' + fmtDur(S.settings.nearby) + '. Crée une alerte pour être prévenu dès qu’une place s’ouvre.'), nextBox()); return out; }
   if (exact.length) out.push(h('h2', {}, `Dans ton créneau · ${exact.length}`), ...exact.slice(0, 25).map((j) => journeyCard(j, R.meta)));

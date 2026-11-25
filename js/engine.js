@@ -328,7 +328,7 @@ export const fullDate = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString
 export { COORDS };
 
 // ---------- Prochaines dates avec une place (quand rien n'existe à la date demandée) ----------
-export function nextDates(net, o, max = 4) {
+export function nextDates(net, o, max = 7) {
   const out = [];
   for (let di = o.di + 1; di < net.dates.length && out.length < max; di++) {
     const js = journeys(net, { ...o, di, nearby: 0 });

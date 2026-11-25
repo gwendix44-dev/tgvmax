@@ -14,7 +14,7 @@ S.settings = { ...DEFAULTS, ...(S.settings || {}) }; S.deviceId ||= uid() + uid(
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} };
 
 // ---------- Exécution (non persistant) ----------
-const R = { tab: 'dest', meta: null, err: null, alertRes: {}, push: 'off', chat: [], lastDraft: null, sub: null };
+const R = { tab: 'trip', meta: null, err: null, alertRes: {}, push: 'off', chat: [], lastDraft: null, sub: null };
 const D = { date: null, mode: 'one', depFrom: null, depTo: null, maxChanges: null, maxDur: 0, night: true, view: 'list', res: null, loading: false, err: null, from: null, tok: 0 };
 const T = { from: null, to: null, date: null, tmode: 'depart', t1: null, t2: null, maxChanges: null, sort: 'time', res: null, loading: false, err: null, tok: 0 };
 
@@ -37,7 +37,7 @@ const stale = () => R.meta && Date.now() - Date.parse(R.meta.sourceUpdated || R.
 
 // ---------- Squelette ----------
 const app = document.getElementById('app');
-const TABS = [['dest', 'Destinations', 'map'], ['trip', 'Trajets', 'route'], ['alerts', 'Alertes', 'bell'], ['chat', 'Assistant', 'chat'], ['more', 'Plus', 'more']];
+const TABS = [['trip', 'Trajets', 'route'], ['dest', 'Destinations', 'map'], ['alerts', 'Alertes', 'bell'], ['chat', 'Assistant', 'chat'], ['more', 'Plus', 'more']];
 function render() {
   const top = h('header', { class: 'top' }, h('h1', {}, 'TGV MAX'), R.meta && h('span', { class: 'fresh' + (stale() ? ' stale' : '') },
     `Données SNCF du ${new Date(R.meta.sourceUpdated || R.meta.generated).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${stale() ? ' · mise à jour en retard' : ''}`));

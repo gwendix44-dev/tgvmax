@@ -141,23 +141,23 @@ function destResults() {
     const isAlt = (p) => p.items.every((i) => i.altFrom), main = res.filter((p) => !isAlt(p)), alt = res.filter(isAlt);
     if (!D.only) return [info, ...res.map(rtRow), sourceNote()];
     return [info, ...(main.length ? main.map(rtRow) : [h('div', { class: 'empty' }, `Aucun aller-retour au départ de ${name(D.from)} avec ces critères.`)]),
-      alt.length && !D.showAlt && seeBtn(alt.length, 'Voir'), ...(D.showAlt ? [h('h2', {}, `Depuis d’autres gares · ${alt.length}`), ...alt.map(rtRow)] : []), sourceNote()];
+      alt.length > 0 && !D.showAlt && seeBtn(alt.length, 'Voir'), ...(D.showAlt ? [h('h2', {}, `Depuis d’autres gares · ${alt.length}`), ...alt.map(rtRow)] : []), sourceNote()];
   }
   const main = res.filter((r) => !r.viaAlt), alt = res.filter((r) => r.viaAlt);
   if (D.only) return [info, main.length ? h('h2', {}, `Depuis ${name(D.from)} · ${main.length}`) : h('div', { class: 'empty' }, `Aucune place MAX au départ de ${name(D.from)} ce jour-là.`), ...main.map(destRow),
-    alt.length && !D.showAlt && seeBtn(alt.length, 'Voir'),
+    alt.length > 0 && !D.showAlt && seeBtn(alt.length, 'Voir'),
     ...(D.showAlt ? [h('h2', {}, `Depuis d’autres gares · ${alt.length}`), ...alt.map(destRow)] : []), sourceNote()];
   const altName = alt.length ? name(R.meta.stations[alt[0].fastest.legs[0].o]) : '';
-  return [info, main.length && h('h2', {}, `Depuis ${name(D.from)} · ${main.length}`), ...main.map(destRow),
-    alt.length && h('h2', {}, `Pas de place depuis ${name(D.from)} — au départ d’une gare proche · ${alt.length}`),
-    alt.length && h('div', { class: 'tiny muted', style: 'margin:0 2px 6px' }, `Ces destinations n’ont aucun train MAX au départ de ${name(D.from)} ce jour-là, mais en ont depuis ${altName} ou une autre gare accessible en TER direct (trajet jusqu’à la gare indiqué sur chaque fiche).`),
+  return [info, main.length > 0 && h('h2', {}, `Depuis ${name(D.from)} · ${main.length}`), ...main.map(destRow),
+    alt.length > 0 && h('h2', {}, `Pas de place depuis ${name(D.from)} — au départ d’une gare proche · ${alt.length}`),
+    alt.length > 0 && h('div', { class: 'tiny muted', style: 'margin:0 2px 6px' }, `Ces destinations n’ont aucun train MAX au départ de ${name(D.from)} ce jour-là, mais en ont depuis ${altName} ou une autre gare accessible en TER direct (trajet jusqu’à la gare indiqué sur chaque fiche).`),
     ...alt.map(destRow), sourceNote()];
 }
 function destRow(r) {
   const f = r.fastest;
   return h('button', { class: 'item', onclick: () => destSheet(r) },
     h('div', { class: 'row' }, h('div', { class: 't grow' }, name(r.name)), h('span', { class: 'muted small times' }, fmtDur(f.dur))),
-    r.others && r.others.length && h('div', { class: 's' }, `ou ${r.others.map(name).join(', ')}`),
+    r.others?.length > 0 && h('div', { class: 's' }, `ou ${r.others.map(name).join(', ')}`),
     h('div', { class: 's' }, `${fmtTime(f.s)} → ${fmtTime(f.e)}${r.n > 1 ? ` · ${r.n} horaires` : ''}`),
     h('div', { class: 'chips' }, f.changes ? chip(`${f.changes} corr.`, 'warn') : chip('Direct', 'ok'), r.journeys.some((j) => j.night) && chip('Nuit', 'night'), r.viaAlt && chip(`Depuis ${name(R.meta.stations[f.legs[0].o])}`, 'gray'),
       favHas('place', r.name) && chip('★ Favori', 'gray')));

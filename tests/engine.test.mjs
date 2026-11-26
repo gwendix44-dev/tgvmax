@@ -114,12 +114,12 @@ test('gares de secours au départ : uniquement des TER directs ≤ durée max ; 
   for (const s of ['MASSY TGV', 'MASSY PALAISEAU', 'MARNE LA VALLEE CHESSY', 'AEROPORT ROISSY CDG 2 TGV']) assert.ok(paris.includes(s), s);
 });
 
-test('A/R « nuit + journée » : départ la veille, arrivée le lendemain matin, retour vers midi J+2', () => {
+test('A/R « nuit + journée » : départ la veille, arrivée le lendemain matin, retour en train de nuit J+1, arrivée J+2 avant 14h30', () => {
   const di = net.dayIndex(net.dates[4]);
-  const r = roundTrips(net, { cfg: {}, from: 'PARIS (intramuros)', di, nights: 2, nightOut: true, depFrom: 720, depTo: 1439, backFrom: 660, backTo: 870, minStay: 240, maxChanges: 1 });
+  const r = roundTrips(net, { cfg: {}, from: 'PARIS (intramuros)', di, nights: 1, nightOut: true, depFrom: 720, depTo: 1439, backFrom: 960, minStay: 360, maxChanges: 1 });
   for (const p of r) for (const it of p.items) {
     assert.ok(it.out.e >= (di + 1) * DAY && it.out.e <= (di + 1) * DAY + 13 * 60, 'arrivée le lendemain matin');
-    const t = it.back.s - (di + 2) * DAY; assert.ok(t >= 660 && t <= 870, 'retour entre 11h et 14h30');
+    assert.ok(it.back.s >= (di + 1) * DAY + 960, 'retour le soir de la journée sur place'); assert.ok(it.back.e >= (di + 2) * DAY && it.back.e <= (di + 2) * DAY + 870, 'arrivée J+2 avant 14h30');
   }
 });
 test('A/R vers une destination précise', () => {

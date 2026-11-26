@@ -105,7 +105,7 @@ function viewDest() {
         field('Départ dès', timeIn(D.depFrom, (v) => { D.depFrom = v; runDest(); })), field('Départ avant', timeIn(D.depTo, (v) => { D.depTo = v; runDest(); })),
         field('Correspondances', sel(chgOpts, D.maxChanges, (v) => { D.maxChanges = +v; runDest(); })),
         field('Durée max', sel([[0, 'Toutes'], [120, '2 h'], [180, '3 h'], [240, '4 h'], [360, '6 h'], [480, '8 h']], D.maxDur, (v) => { D.maxDur = +v; rerender(); }))),
-      D.mode === 'rtn' && h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Départ la veille (après-midi/soir) en train de nuit, journée complète sur place, retour le lendemain vers midi.'),
+      D.mode === 'rtn' && h('div', { class: 'small muted', style: 'margin-top:8px' }, 'Départ le soir en train de nuit, journée sur place, retour en train de nuit le soir même, de retour chez toi le lendemain avant 14 h 30. Aucune nuit d’hôtel.'),
       D.mode !== 'one' && D.mode !== 'rtn' && h('div', { class: 'row wrap', style: 'margin-top:8px' }, field('Temps min. sur place', sel(STAY, D.minStay, (v) => { D.minStay = +v; runDest(); }))),
       h('div', { class: 'row', style: 'margin-top:10px' }, h('span', { class: 'small grow' }, `Départ uniquement de ${name(D.from)}`), h('input', { type: 'checkbox', class: 'switch', checked: D.only, onchange: (e) => { D.only = e.target.checked; D.showAlt = false; rerender(); } })),
       h('div', { class: 'row', style: 'margin-top:10px' }, h('span', { class: 'small grow' }, 'Inclure les trains de nuit'), h('input', { type: 'checkbox', class: 'switch', checked: D.night, onchange: (e) => { D.night = e.target.checked; runDest(); } }))),
@@ -116,7 +116,7 @@ function viewDest() {
 }
 const STAY = [[60, '1 h'], [120, '2 h'], [180, '3 h'], [240, '4 h'], [360, '6 h'], [480, '8 h']];
 // Paramètres des modes aller-retour (nuit + journée : départ la veille en train de nuit, retour le lendemain midi)
-const rtOpts = (mode, minStay) => (mode === 'rtn' ? { nights: 2, nightOut: true, depFrom: 720, backFrom: 660, backTo: 870, allowNight: true, minStay: 240 }
+const rtOpts = (mode, minStay) => (mode === 'rtn' ? { nights: 1, nightOut: true, depFrom: 720, backFrom: 960, allowNight: true, minStay: 360 }
   : { nights: { rt: 0, rt1: 1, rt2: 2 }[mode], minStay });
 async function runDest() {
   const tok = ++D.tok; D.loading = true; D.err = null; rerender();
@@ -168,7 +168,7 @@ function rtRow(p) {
   return h('button', { class: 'item', onclick: () => rtSheet(p) },
     h('div', { class: 'row' }, h('div', { class: 't grow' }, name(p.name)), h('span', { class: 'chip ok' }, `${fmtDur(it.stay)} sur place`)),
     h('div', { class: 's' }, `Aller ${fmtTime(it.out.s)} → ${fmtTime(it.out.e)} · Retour ${fmtTime(it.back.s)} → ${fmtTime(it.back.e)}`),
-    h('div', { class: 'chips' }, chip(ch ? `${ch} corr. au total` : 'Tout en direct', ch ? 'warn' : 'ok'), (it.out.night || it.back.night) && chip('Nuit', 'night'), it.nights > 0 && chip(`${it.nights} nuit${it.nights > 1 ? 's' : ''} sur place`, 'gray'), it.altFrom && chip('Gare de départ proche', 'gray')));
+    h('div', { class: 'chips' }, chip(ch ? `${ch} corr. au total` : 'Tout en direct', ch ? 'warn' : 'ok'), (it.out.night || it.back.night) && chip('Nuit', 'night'), it.plan === 'rtn' ? chip('Journée sur place · 0 hébergement', 'gray') : it.nights > 0 && chip(`${it.nights} nuit${it.nights > 1 ? 's' : ''} sur place`, 'gray'), it.altFrom && chip('Gare de départ proche', 'gray')));
 }
 const dedupeJ = (list) => list;
 function destSheet(r) {
@@ -179,7 +179,7 @@ function destSheet(r) {
   ...dedupeJ(r.journeys).slice(0, 30).map((j) => journeyCard(j, R.meta, { actions: [alertBtn(draft(j))] }))]);
 }
 function rtSheet(p) {
-  const kids = [h('div', { class: 'muted small', style: 'margin-bottom:6px' }, `${fmtDay(D.date)} · retour ${p.items[0].nights ? `après ${p.items[0].nights} nuit(s)` : 'le soir même'}`)];
+  const kids = [h('div', { class: 'muted small', style: 'margin-bottom:6px' }, `${fmtDay(D.date)} · retour ${p.items[0].plan === 'rtn' ? 'en train de nuit le soir même' : p.items[0].nights ? `après ${p.items[0].nights} nuit(s)` : 'le soir même'}`)];
   p.items.forEach((it, i) => {
     kids.push(h('h2', {}, i === 0 ? 'Plus de temps sur place' : 'Le plus rapide'), h('div', { class: 'row wrap' }, chip(`${fmtDur(it.stay)} sur place`, 'ok'), chip(`${fmtDur(it.travel)} de train au total`, 'gray')),
       journeyCard(it.out, R.meta, { title: 'Aller', actions: [alertBtn({ from: D.from, to: p.name, mode: 'date', date: D.date, timeMode: 'depart', from1: Math.max(0, (it.out.s % 1440) - 30), from2: Math.min(1439, (it.out.s % 1440) + 30), maxChanges: it.out.changes, alts: true })] }),
@@ -233,7 +233,7 @@ function viewTrip() {
       h('div', { class: 'grow' }, picker('Arrivée', name(T.to), () => pickAny(T.to, (s) => { T.to = s; runTrip(); }, 'Gare d’arrivée')))),
     h('div', { class: 'seg', style: 'margin-top:8px' }, [['one', 'Aller simple'], ['rt', 'A/R journée'], ['rt1', 'A/R 1 nuit'], ['rtn', 'Nuit + journée']].map(([k, l]) => h('button', { class: (T.rt || 'one') === k ? 'on' : '', onclick: () => { T.rt = k; runTrip(); } }, l))),
     (T.rt || 'one') !== 'one' && T.rt !== 'rtn' && h('div', { class: 'row', style: 'margin-top:6px' }, field('Temps min. sur place', sel(STAY, T.minStay ?? S.settings.minStay, (v) => { T.minStay = +v; runTrip(); }))),
-    T.rt === 'rtn' && h('div', { class: 'small muted', style: 'margin:6px 2px' }, 'Départ la veille (après-midi/soir) en train de nuit, journée complète sur place, retour le lendemain vers midi. La date choisie est celle du départ.'),
+    T.rt === 'rtn' && h('div', { class: 'small muted', style: 'margin:6px 2px' }, 'Départ le soir en train de nuit, journée sur place, retour en train de nuit le soir même, de retour chez toi le lendemain avant 14 h 30. Aucune nuit d’hôtel. La date choisie est celle du départ.'),
     h('div', { class: 'row', style: 'margin-top:8px' }, h('span', { class: 'small grow' }, `Départ uniquement de ${name(T.from)}`), h('input', { type: 'checkbox', class: 'switch', checked: T.only, onchange: (e) => { T.only = e.target.checked; T.showAlt = false; rerender(); } })),
     dateStrip(R.meta.dates, T.date, (d) => { T.date = d; runTrip(); }),
     h('div', { class: 'card flat' },

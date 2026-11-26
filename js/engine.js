@@ -250,7 +250,7 @@ function roundTripsFrom(net, o, fromName) {
     const x = j.legs[j.legs.length - 1].d;
     if (onlyCl != null && net.cl[x] !== onlyCl) continue;
     // « nuit + journée » : on part l'après-midi/soir, on arrive le lendemain matin (train de nuit), journée complète sur place
-    if (o.nightOut && !(j.e >= base + DAY && j.e <= base + DAY + 13 * 60)) continue;
+    if (o.nightOut && !(j.night && j.e >= base + DAY && j.e <= base + DAY + 13 * 60)) continue;
     if (!homeSet.has(x)) (byX.get(x) || byX.set(x, []).get(x)).push(j);
   }
   const plans = [];
@@ -260,6 +260,8 @@ function roundTripsFrom(net, o, fromName) {
     const rets = search(net, { ...common, origins: [x], dests: homeSet, di: back, depFrom: Math.max(cfg.earliest, o.backFrom ?? 0, eMin + minStay - back * DAY), depTo: o.backTo ?? DAY - 1, sameDay: nights === 0, maxDur: 30 * 60 });
     const combos = [];
     for (const r of rets) {
+      // « nuit + journée » : retour en train de nuit le soir même de la journée sur place, arrivée chez soi le lendemain avant ~14h30
+      if (o.nightOut && !(r.night && r.e >= (back + 1) * DAY && r.e <= (back + 1) * DAY + 870)) continue;
       let bestOut = null;
       for (const j of list) if (j.e + minStay <= r.s && (!bestOut || j.e > bestOut.e)) bestOut = j;
       if (bestOut) combos.push({ out: bestOut, back: r, stay: r.s - bestOut.e, travel: bestOut.dur + r.dur });
@@ -269,7 +271,7 @@ function roundTripsFrom(net, o, fromName) {
     const add = (c) => pick.set(c.out.s + ':' + c.back.s, c);
     add(combos.reduce((m, c) => (c.stay > m.stay ? c : m)));
     add(combos.reduce((m, c) => (c.travel < m.travel ? c : m)));
-    const items = [...pick.values()].map((c) => ({ ...c, x, name: net.name(x), nights, altFrom: null }));
+    const items = [...pick.values()].map((c) => ({ ...c, x, name: net.name(x), nights, altFrom: null, plan: o.nightOut ? 'rtn' : null }));
     plans.push({ x, name: net.name(x), items });
   }
   return plans.sort((a, b) => Math.max(...b.items.map((i) => i.stay)) - Math.max(...a.items.map((i) => i.stay)));

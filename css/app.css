@@ -139,3 +139,15 @@ code.k { background: var(--bg); border: 1px solid var(--line); padding: 2px 6px;
 .chatbar .btn { flex: none; }
 a { color: var(--accent); }
 .btn.primary { text-decoration: none; }
+
+/* Tablette / paysage */
+@media (min-width: 900px) {
+  #app, nav.tabs, .sheet { max-width: 1000px; }
+  main { padding-left: 24px; padding-right: 24px; }
+  .chips { flex-wrap: wrap; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  nav.tabs button { padding: 4px 2px; flex-direction: row; justify-content: center; gap: 6px; }
+  main { padding-bottom: 56px; }
+  .sheet { max-height: 98dvh; }
+}
